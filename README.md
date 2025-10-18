@@ -1,7 +1,7 @@
 # NoCode-bench
 C:\Users\User\AppData\Local\Programs\Python\Python311\python.exe -m venv .venv
 .venv\Scripts\Activate.ps1
-pip install django djangorestframework celery redis google-genai python-dotenv psycopg2-binary
+pip install django djangorestframework celery redis google-genai python-dotenv psycopg2-binary pytest google-generativeai
 //python manage.py startapp agent_core
 
 

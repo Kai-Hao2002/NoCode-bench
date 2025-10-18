@@ -7,6 +7,8 @@ class EvaluationTask(models.Model):
         ('RUNNING', 'Running'),
         ('COMPLETED', 'Completed'),
         ('FAILED', 'Failed'),
+        ('FAILED_APPLY', 'Failed_Apply'), # 🚀 新增應用失敗狀態
+        ('FAILED_TEST', 'Failed_Test'),      # 🚀 新增測試失敗狀態
     ]
 
     # NoCode-bench 實例 ID，用於查找程式碼庫

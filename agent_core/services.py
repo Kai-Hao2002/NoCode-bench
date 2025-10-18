@@ -1,198 +1,186 @@
-# agent_core/services.py
 import os
 import shutil
 import subprocess
 import time
 import re
-from google import genai
-from google.genai import types
-from google.genai.errors import APIError
-from django.conf import settings # 用於安全地存取 settings.GEMINI_API_KEY
+import stat
+from google import generativeai as genai
+from django.conf import settings
+from django.db import connection
 
-# --- 核心配置 ---
-# 隔離工作區的根目錄 (確保此目錄在系統中存在，例如 /tmp/nocode_bench_runs/)
-ROOT_WORKSPACE = os.path.join(settings.BASE_DIR, 'nocode_workspaces') 
+# --- 核心設定 (Core Configuration) ---
+ROOT_WORKSPACE = os.path.join(settings.BASE_DIR, 'nocode_workspaces')
 os.makedirs(ROOT_WORKSPACE, exist_ok=True)
+ORIGINAL_DATASET_ROOT = os.path.join(settings.BASE_DIR, 'NoCode-bench_Verified', 'data')
 
+# --- 權限錯誤處理 (Permission Error Handler) ---
+def onerror(func, path, exc_info):
+    if not os.access(path, os.W_OK):
+        os.chmod(path, stat.S_IWUSR | stat.S_IWRITE)
+        func(path)
+    else:
+        raise
 
-# --- 輔助函數 (Utility Functions) ---
+# --- 輔助函數 (Helper Functions) ---
+def extract_patch_from_response(response_text: str) -> str:
+    match = re.search(r"```(diff|python|py)?\n(.*?)```", response_text, re.DOTALL)
+    if match:
+        return match.group(2).strip()
+    if response_text.strip().startswith(('---', 'diff --git')):
+        return response_text.strip()
+    return ""
 
-def setup_workspace(nocode_bench_id):
-    """
-    根據任務 ID 複製原始程式碼庫到一個隔離的工作目錄。
-    注意：您需要將 '/path/to/your/nocode_data/' 替換為您資料集的實際路徑。
-    """
-    # 假設 NoCode-bench 資料集的所有 Codebase 儲存在此路徑
-    ORIGINAL_REPOS_ROOT = '/path/to/your/nocode_data/' 
-    
-    original_repo_path = os.path.join(ORIGINAL_REPOS_ROOT, nocode_bench_id)
-    
-    # 建立一個獨特且隔離的暫存目錄
+def setup_workspace(nocode_bench_id: str) -> str:
+    parts = nocode_bench_id.split('__')
+    repo_owner = parts[0]
+    repo_name_base = parts[1].split('-')[0]
+    repo_path_segment = os.path.join(repo_owner, repo_name_base)
+    original_repo_path = os.path.join(ORIGINAL_DATASET_ROOT, repo_path_segment)
     run_id = str(time.time()).replace('.', '')
-    temp_dir = os.path.join(ROOT_WORKSPACE, f'run_{nocode_bench_id}_{run_id}')
-    
+    temp_dir = os.path.join(ROOT_WORKSPACE, f'run_{nocode_bench_id.replace("__", "_")}_{run_id}')
     if not os.path.exists(original_repo_path):
-        # ⚠️ 這是為了防止找不到資料集，實務上應該是存在的
-        os.makedirs(original_repo_path, exist_ok=True) 
-        # ⚠️ 模擬一個空的程式碼庫以供測試，您應該替換為複製真實 Codebase
-        # raise ValueError(f"原始程式碼庫未找到: {original_repo_path}")
-    
-    # 複製原始程式碼庫到工作目錄 (假設使用 shutil.copytree 複製整個目錄)
-    shutil.copytree(original_repo_path, temp_dir)
-    return temp_dir
+        raise FileNotFoundError(f"Original codebase not found! Check path: {original_repo_path}")
+    try:
+        shutil.copytree(original_repo_path, temp_dir)
+        subprocess.run(['git', 'init'], cwd=temp_dir, check=True, capture_output=True, text=True)
+        subprocess.run(['git', 'add', '.'], cwd=temp_dir, check=True, capture_output=True, text=True)
+        subprocess.run(['git', 'commit', '-m', 'Initial snapshot', '--allow-empty'], cwd=temp_dir, check=True, capture_output=True, text=True)
+        return temp_dir
+    except subprocess.CalledProcessError as e:
+        raise IOError(f"Failed to initialize Git: {e.stderr}")
+    except Exception as e:
+        raise IOError(f"File operation failed: {e}")
 
-def read_codebase_context(workspace_path):
-    """
-    模擬 Agent 讀取 codebase，作為給 LLM 的上下文。
-    實務上，您需要設計複雜邏輯來判斷哪些檔案與任務相關。
-    這裡僅為簡單示例。
-    """
-    context = []
-    # 簡單地讀取幾個關鍵檔案的結構
+def apply_patch_to_repo(temp_dir: str, patch_code: str) -> tuple[bool, str]:
+    if not patch_code.strip():
+        return False, "Patch content was empty or invalid."
+    try:
+        result = subprocess.run(
+            ['git', 'apply', '--verbose', '-p1', '--3way', '--recount', '--ignore-whitespace', '--whitespace=fix'],
+            input=patch_code, cwd=temp_dir, text=True, check=False, capture_output=True
+        )
+        if result.returncode == 0:
+            return True, None
+        else:
+            status_result = subprocess.run(['git', 'status', '--porcelain'], cwd=temp_dir, text=True, capture_output=True)
+            if status_result.stdout.strip():
+                return True, f"Patch applied with conflicts. Stderr: {result.stderr.strip()}"
+            return False, f"Git apply failed. Stderr: {result.stderr.strip()} | Stdout: {result.stdout.strip()}"
+    except Exception as e:
+        return False, f"An unexpected error occurred during git apply: {e}"
+
+def calculate_metrics(tests_passed, applied_successfully, patch_code, run_time_seconds):
+    if tests_passed:
+        success_percent, applied_percent = 100.0, 100.0
+    elif applied_successfully:
+        success_percent, applied_percent = 0.0, 100.0
+    else:
+        success_percent, applied_percent = 0.0, 0.0
+    return {
+        'success_percent': success_percent, 'applied_percent': applied_percent,
+        'rt_percent': run_time_seconds, 'fv_micro': 0.0, 'fv_macro': 0.0,
+        'file_percent': 0.0, 'num_token': len(patch_code.split()),
+    }
+
+# --- 🚀 兩階段 AI 策略函數 (Two-Pass AI Strategy Functions) ---
+def _get_relevant_files_from_llm(model, doc_change: str, workspace_path: str) -> list[str]:
+    all_files = []
     for root, _, files in os.walk(workspace_path):
+        if '.git' in root: continue
         for file in files:
-            # 排除大型檔案、虛擬環境和隱藏檔案
-            if file.endswith(('.py', '.txt', '.json', 'setup.cfg')) and not file.startswith('.') and not 'venv' in root:
-                file_path = os.path.join(root, file)
-                try:
-                    with open(file_path, 'r', encoding='utf-8') as f:
-                        content = f.read(1000) # 只讀取前 1000 字元作為預覽
-                        context.append(f"--- File: {os.path.relpath(file_path, workspace_path)} ---\n{content}\n...\n")
-                except Exception:
-                    continue
+            all_files.append(os.path.relpath(os.path.join(root, file), workspace_path))
+    prompt = (
+        f"You are a file locator agent. Based on the documentation change below, identify the most relevant files to modify from the provided file list.\n\n"
+        f"**DOCUMENTATION CHANGE:**\n{doc_change}\n\n"
+        f"**FILE LIST:**\n{', '.join(all_files)}\n\n"
+        "**INSTRUCTIONS:**\n"
+        "1. List the full paths of the files that most likely need to be changed.\n"
+        "2. Your output MUST ONLY be a comma-separated list of file paths. Do not include any other text."
+    )
+    response = model.generate_content(prompt)
+    return [f.strip().replace('\\', '/') for f in response.text.split(',') if f.strip() and not f.strip().endswith(('.rst', '.md'))]
+
+def _get_full_context_from_files(workspace_path: str, file_list: list[str]) -> str:
+    context = []
+    for file_path in file_list:
+        full_path = os.path.join(workspace_path, file_path)
+        if os.path.exists(full_path):
+            try:
+                with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                    context.append(f"--- Full content of file: {file_path} ---\n{content}\n")
+            except Exception:
+                continue
     return "\n".join(context)
 
-def apply_patch_to_repo(temp_dir, patch_code):
-    """
-    實作邏輯來應用 LLM 生成的補丁程式碼。
-    實務上，通常使用 Git 或 'patch' 工具。這裡使用一個簡單的檔案寫入/刪除模擬。
-    """
-    # 由於補丁應用邏輯非常複雜且容易出錯，我們在這裡簡化為一個成功的模擬。
-    # ⚠️ 建議使用專門處理 diff/patch 格式的函式庫來確保可靠性。
-    # 如果您的 patch_code 是標準的 `git diff` 或 `unified diff` 格式，
-    # 可以使用 Python 的 `subprocess` 執行 `patch` 或 `git apply`。
-    
-    # 模擬應用成功
-    if patch_code.strip():
-        # 這裡應該檢查補丁是否會修改文件
-        # 如果是 git patch 格式，則應用
-        # subprocess.run(['git', 'apply', '--ignore-whitespace', '-'], input=patch_code, cwd=temp_dir, text=True, check=True)
-        return True # 假設補丁應用成功
-    return False
-
-def calculate_metrics(tests_passed, applied_successfully, patch_code, run_time_seconds, **kwargs):
-    """
-    計算所有必需的 NoCode-bench 指標。
-    FV-Micro/Macro 需要複雜的代碼差異分析，這裡僅為佔位符。
-    """
-    # 計算 Token 數量 (粗略估計)
-    num_token = len(patch_code.split())
-    
-    # 成功率 (Success%)：補丁成功應用 AND 測試通過
-    success_percent = 100.0 if tests_passed and applied_successfully else 0.0
-    
-    metrics = {
-        'Success%': success_percent,
-        'Applied%': 100.0 if applied_successfully else 0.0,
-        'RT%': run_time_seconds, 
-        'FV-Micro': 0.5, # 佔位符
-        'FV-Macro': 0.5, # 佔位符
-        'File%': 0.1,    # 佔位符
-        'num_token': num_token,
-    }
-    return metrics
-
-
-# --- 核心 Agent 函數 ---
-
+# --- 核心 Agent 函數 (Core Agent Function) ---
 def run_gemini_agent(task_id: int, nocode_bench_id: str, doc_change: str):
-    """主要的 LLM 呼叫和 Agent 協調邏輯。"""
-    
-    # --- 1. 環境設定與計時 ---
+    if not settings.GEMINI_API_KEY:
+        return {'error': "Gemini client not configured. Check GEMINI_API_KEY.", 'status': 'FAILED'}
+    genai.configure(api_key=settings.GEMINI_API_KEY)
     start_time = time.time()
     workspace_path = None
-    
     try:
-        # 建立工作區
         workspace_path = setup_workspace(nocode_bench_id)
+        model = genai.GenerativeModel('gemini-2.5-flash')
+
+        # --- 🚀 執行兩階段策略 (Execute Two-Pass Strategy) ---
+        relevant_files = _get_relevant_files_from_llm(model, doc_change, workspace_path)
+        if not relevant_files:
+            return {'error': "AI failed to identify any relevant CODE files to modify.", 'status': 'FAILED'}
+
+        full_context = _get_full_context_from_files(workspace_path, relevant_files)
         
-        # 提取程式碼上下文
-        code_context = read_codebase_context(workspace_path) 
-        
-        # --- 2. LLM 程式碼生成 (Code Generation) ---
-        client = genai.Client(api_key=settings.GEMINI_API_KEY)
-        
-        # 建立詳細的提示 (Prompt Engineering)
-        system_prompt = (
-            "You are an expert Python software engineer specializing in fixing and adding features "
-            "to open-source projects. Your task is to implement a feature based on a documentation change."
-            "The project codebase is provided below. You must analyze the code and generate a patch."
-            "Your output MUST ONLY be a single markdown code block containing the unified diff or code "
-            "changes. Do NOT include any introductory or explanatory text. "
-            "Use the unified diff format (starting with ```diff) for complex changes."
+        # 🚀 終極提示詞：加入嚴格的負面指令 (Ultimate Prompt: Add strict negative constraints)
+        prompt = (
+            f"You are an expert AI software engineer. Generate a unified diff CODE patch to implement a feature.\n\n"
+            f"**DOCUMENTATION CHANGE TO IMPLEMENT:**\n{doc_change}\n\n"
+            f"**FULL CONTENT OF RELEVANT CODE FILES:**\n{full_context}\n\n"
+            "**CRITICAL INSTRUCTIONS:**\n"
+            "1. Your entire response MUST ONLY be the required CODE patch in the unified diff format.\n"
+            "2. Each file's changes MUST be preceded by its own `diff --git` header.\n"
+            "3. **DO NOT** generate patches for documentation files (`.rst`, `.md`). Your output must only contain changes for CODE files (`.py`, etc.).\n"
+            "4. **DO NOT** include any explanatory text, greetings, or apologies. Only the diff."
         )
 
-        user_prompt = (
-            f"**Task ID:** {nocode_bench_id}\n"
-            f"**Documentation Change:** {doc_change}\n\n"
-            f"**Full Codebase Context:**\n{code_context}\n\n"
-            "Generate the necessary code patch ONLY in a single markdown block."
-        )
+        response = model.generate_content(prompt)
+        patch_code = extract_patch_from_response(response.text)
 
-        # 🚀 修正內容結構：將 System Prompt 作為第一個 User 訊息，指導模型行為
-        contents = [
-            # 第一條訊息：傳遞系統指令，指導模型行為
-            {"role": "user", "parts": [
-                {"text": "請嚴格遵守以下角色與輸出格式指令：\n" + system_prompt}
-            ]},
-            # 第二條訊息：傳遞實際的任務輸入
-            {"role": "user", "parts": [
-                {"text": user_prompt}
-            ]},
-        ]
+        print("\n" + "="*20 + " DEBUG: AI GENERATED PATCH " + "="*20)
+        print(patch_code)
+        print("="*24 + " END OF PATCH " + "="*24 + "\n")
 
-
-        # 修正後的呼叫方式：
-        response = client.models.generate_content(
-            model='gemini-2.5-pro',
-            contents=contents, 
-            # ❌ 移除 config=config 參數
-        )
-        
-
-        # 提取程式碼補丁 (需要穩健的解析邏輯)
-        # 尋找 Markdown 程式碼區塊
-        match = re.search(r"```(diff|python|py)\n(.*?)\n```", response.text, re.DOTALL)
-        patch_code = match.group(2).strip() if match else response.text.strip() # 嘗試提取或使用全文
-        
-        # --- 3. 運行測試與評估 ---
-        applied_successfully = apply_patch_to_repo(workspace_path, patch_code) 
-        
+        applied_successfully, git_error = apply_patch_to_repo(workspace_path, patch_code)
         tests_passed = False
+        test_stderr = None
         if applied_successfully:
-            # ⚠️ 這裡需要實際運行測試的邏輯
-            # subprocess.run(['pytest'], cwd=workspace_path, check=False)
-            tests_passed = True # 暫時模擬測試通過
-
+            # Install dependencies before running tests
+            if os.path.exists(os.path.join(workspace_path, 'requirements.txt')):
+                subprocess.run(['pip', 'install', '-r', 'requirements.txt'], cwd=workspace_path, check=True, capture_output=True, text=True)
+            elif os.path.exists(os.path.join(workspace_path, 'setup.py')):
+                 subprocess.run(['pip', 'install', '.'], cwd=workspace_path, check=True, capture_output=True, text=True)
+            
+            test_result = subprocess.run(['pytest'], cwd=workspace_path, text=True, check=False, capture_output=True)
+            tests_passed = (test_result.returncode == 0)
+            test_stderr = test_result.stderr
+            
         run_time = time.time() - start_time
+        final_results = calculate_metrics(tests_passed, applied_successfully, patch_code, run_time)
+        final_results['generated_patch'] = patch_code
+        if tests_passed:
+            final_results['status'] = 'COMPLETED'
+        elif applied_successfully:
+            final_results['status'] = 'FAILED_TEST'
+            final_results['error'] = f"Pytest failed. Stderr: {test_stderr[:1000]}"
+        else:
+            final_results['status'] = 'FAILED_APPLY'
+            final_results['error'] = f"Git Apply failed. {git_error}"
+        return final_results
         
-        # 計算最終指標
-        results = calculate_metrics(
-            tests_passed=tests_passed, 
-            applied_successfully=applied_successfully,
-            patch_code=patch_code,
-            run_time_seconds=run_time
-        )
-        
-        results['generated_patch'] = patch_code
-        print(f"DEBUG: Agent Results Calculated: {results}")
-        return results
-
-    except APIError as e:
-        return {'error': f"Gemini API Error: {e}"}
     except Exception as e:
-        return {'error': f"Agent Run Error: {e}"}
+        return {'error': f"An unexpected error occurred in the agent: {e}", 'status': 'FAILED'}
     finally:
-        # --- 4. 清理 (Cleanup) ---
+        connection.close()
         if workspace_path and os.path.exists(workspace_path):
-            shutil.rmtree(workspace_path)
+            shutil.rmtree(workspace_path, onerror=onerror)
+
