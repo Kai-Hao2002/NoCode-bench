@@ -100,7 +100,7 @@ def process_evaluation_task(self, task_id):
         if not settings.GEMINI_API_KEY:
             raise Exception("Gemini client not configured. Check GEMINI_API_KEY.")
         genai.configure(api_key=settings.GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-1.0-pro')
+        model = genai.GenerativeModel('gemini-2.5-pro')
         workspace_path = setup_workspace(task.nocode_bench_id)
         
         relevant_files = _get_relevant_files_from_llm(model, task.doc_change_input, workspace_path)
