@@ -80,7 +80,7 @@ WSGI_APPLICATION = 'nocode_project.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'Nocodedb',                
+        'NAME': 'Nocode',                
         # 從 .env 讀取，並使用 'myuser'/'mypass' 作為預設值
         'USER': os.getenv('DB_USER', 'myuser'),       
         'PASSWORD': os.getenv('DB_PASS', 'mypass'),   
