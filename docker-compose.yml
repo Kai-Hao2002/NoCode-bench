@@ -26,6 +26,7 @@ services:
     volumes:
       - static_volume:/app/staticfiles
       - media_volume:/app/media
+      - nocode_dataset:/app/NoCode-bench_Verified
     expose:
       - 8000
     restart: always
@@ -72,3 +73,4 @@ volumes:
   media_volume:
   nocode_workspaces: # 🚀 確保這個持久卷存在
                      # (Ensure this persistent volume exists)
+  nocode_dataset:
