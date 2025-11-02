@@ -1,6 +1,6 @@
 C:\Users\User\AppData\Local\Programs\Python\Python311\python.exe -m venv .venv
 .venv\Scripts\activate.bat
-pip install django djangorestframework celery redis google-genai python-dotenv psycopg2-binary pytest google-generativeai unidiff gevent
+pip install django djangorestframework celery redis google-genai python-dotenv psycopg2-binary pytest google-generativeai unidiff gevent gunicorn psycopg2-binary  whitenoise  dj-database-url
 //python manage.py startapp agent_core
 
 
@@ -123,4 +123,12 @@ celery -A nocode_project worker --loglevel=info -P gevent --concurrency=1
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/tasks/start-all/
+```
+
+---
+
+## Deployment
+
+```bash
+freeze > requirements.txt
 ```

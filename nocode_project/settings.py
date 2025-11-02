@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+import dj_database_url
 from dotenv import load_dotenv 
 load_dotenv() # 確保這行在頂部
 
@@ -23,12 +24,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-ef4=(=u9#7n0d&^9yie=h0ma*7ys2k3^lx^b8$tgj=575s(kk8'
+# local test
+# SECRET_KEY = 'django-insecure-ef4=(=u9#7n0d&^9yie=h0ma*7ys2k3^lx^b8$tgj=575s(kk8'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'your-development-key-fallback')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# local test
+# DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
-ALLOWED_HOSTS = []
+# local test
+# ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
+RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
 
 # Application definition
@@ -52,6 +62,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware', 
 ]
 
 ROOT_URLCONF = 'nocode_project.urls'
@@ -77,16 +88,26 @@ WSGI_APPLICATION = 'nocode_project.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# local test
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': 'Nocode',                
+#         # 從 .env 讀取，並使用 'myuser'/'mypass' 作為預設值
+#         'USER': os.getenv('DB_USER', 'myuser'),       
+#         'PASSWORD': os.getenv('DB_PASS', 'mypass'),   
+#         'HOST': 'localhost',               
+#         'PORT': '5432',
+#     }
+# }
+
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'Nocode',                
-        # 從 .env 讀取，並使用 'myuser'/'mypass' 作為預設值
-        'USER': os.getenv('DB_USER', 'myuser'),       
-        'PASSWORD': os.getenv('DB_PASS', 'mypass'),   
-        'HOST': 'localhost',               
-        'PORT': '5432',
-    }
+    'default': dj_database_url.config(
+        # 如果沒有 'DATABASE_URL'，則退回到您的 db.sqlite3
+        # (Fall back to your db.sqlite3 if 'DATABASE_URL' is not present)
+        default=f"sqlite:///{os.path.join(BASE_DIR, 'db.sqlite3')}",
+        conn_max_age=600
+    )
 }
 
 
@@ -124,7 +145,11 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+#local test
+# STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -133,12 +158,17 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # --- Celery 設定 ---
 # 假設 Redis 運行在預設位置 (使用 Docker 啟動)
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+#local test
+# CELERY_BROKER_URL = 'redis://localhost:6379/0'
+# CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 
 # --- Gemini API Key (建議使用環境變數) ---
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+#local test
+# GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 print(f"DEBUG: Gemini Key Load Status: {bool(GEMINI_API_KEY)}")
