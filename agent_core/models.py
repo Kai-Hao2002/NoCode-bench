@@ -17,7 +17,9 @@ class EvaluationTask(models.Model):
     
     ground_truth_patch = models.TextField(help_text="The ground-truth diff patch from the dataset.", null=True, blank=True)
 
-    feature_test = models.TextField(help_text="The code for the new feature test (test.py).")
+    feature_test_patch = models.TextField(help_text="The ground-truth test patch (from 'test_patch').")
+    f2p_test_names = models.JSONField(default=list, help_text="List of FAIL2PASS test names.")
+    p2p_test_names = models.JSONField(default=list, help_text="List of PASS2PASS test names (regression tests).")
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     celery_task_id = models.CharField(max_length=255, null=True, blank=True)

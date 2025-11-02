@@ -9,8 +9,6 @@ class Command(BaseCommand):
     help = 'Loads the 114 instances from NoCode-bench_Verified/test/data.jsonl into the database.'
 
     def handle(self, *args, **options):
-        # 🚀 這是 NoCode-bench_Verified/test/data.jsonl 的正確路徑
-        # (This is the correct path to NoCode-bench_Verified/test/data.jsonl)
         JSONL_PATH = os.path.join(settings.BASE_DIR, 'NoCode-bench_Verified', 'test', 'data.jsonl')
         
         if not os.path.exists(JSONL_PATH):
@@ -32,24 +30,30 @@ class Command(BaseCommand):
                     try:
                         data = json.loads(line)
                         
-                        # 🚀 這是 data.jsonl 中的正確欄位
-                        # (These are the correct fields from data.jsonl)
-                        nocode_bench_id = data.get('id')
-                        doc_change = data.get('doc_change')
-                        ground_truth_patch = data.get('solution_patch')
-                        feature_test = data.get('test') # 'test' 欄位包含 test.py 程式碼
-                                                        # (The 'test' field has the test.py code)
+                        # 🚀 更改 (CHANGE): 這些是來自 data.jsonl 的 *真實* 鍵名
+                        # (These are the *real* key names from data.jsonl)
+                        nocode_bench_id = data.get('instance_id')
+                        doc_change = data.get('problem_statement')
+                        ground_truth_patch = data.get('feature_patch')
+                        feature_test_patch = data.get('test_patch')
+                        f2p_test_names = data.get('FAIL2PASS', [])
+                        p2p_test_names = data.get('PASS2PASS', [])
 
-                        if not all([nocode_bench_id, doc_change, ground_truth_patch, feature_test]):
-                            self.stdout.write(self.style.WARNING(f"Skipping instance: missing required fields."))
+
+                        if not all([nocode_bench_id, doc_change, ground_truth_patch, feature_test_patch]):
+                            self.stdout.write(self.style.WARNING(f"Skipping {nocode_bench_id or 'instance'}: missing required fields (id, problem_statement, feature_patch, or test_patch)."))
                             continue
                         
                         EvaluationTask.objects.create(
                             nocode_bench_id=nocode_bench_id,
                             doc_change_input=doc_change,
                             ground_truth_patch=ground_truth_patch,
-                            feature_test=feature_test, # 🚀 儲存新功能測試
-                                                      # (Save the new feature test)
+                            feature_test_patch=feature_test_patch, # 🚀 儲存
+                                                                  # (Save)
+                            f2p_test_names=f2p_test_names,       # 🚀 儲存
+                                                                  # (Save)
+                            p2p_test_names=p2p_test_names,       # 🚀 儲存
+                                                                  # (Save)
                             status='PENDING'
                         )
                         count += 1

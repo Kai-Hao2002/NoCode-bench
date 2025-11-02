@@ -124,13 +124,15 @@ def process_evaluation_task(self, task_id):
             
             prompt_text = _build_prompt_for_attempt(task.doc_change_input, context_content_str, history)
             
-            # 🚀 更改 (CHANGE): 傳入 task.feature_test
-            # (Pass in task.feature_test)
+            # 🚀 更改 (CHANGE): 傳入所有測試數據
+            # (Pass in all test data)
             attempt_result = run_agent_attempt(
                 workspace_path=workspace_path,
                 model=model,
                 prompt_text=prompt_text,
-                feature_test_string=task.feature_test # 🚀 更改 (CHANGE)
+                feature_test_patch=task.feature_test_patch, # 🚀 新增 (NEW)
+                f2p_test_names=task.f2p_test_names,         # 🚀 新增 (NEW)
+                p2p_test_names=task.p2p_test_names          # 🚀 新增 (NEW)
             )
             
             attempt = EvaluationAttempt.objects.create(

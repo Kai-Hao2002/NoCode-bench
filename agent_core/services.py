@@ -17,8 +17,7 @@ from io import StringIO
 ROOT_WORKSPACE = os.path.join(settings.BASE_DIR, 'nocode_workspaces')
 os.makedirs(ROOT_WORKSPACE, exist_ok=True)
 ORIGINAL_DATASET_ROOT = os.path.join(settings.BASE_DIR, 'NoCode-bench_Verified', 'data')
-# 🚀 移除 (REMOVED): 不再需要 TEST_DATASET_ROOT
-# (TEST_DATASET_ROOT is no longer needed)
+
 
 # --- 權限錯誤處理 (Permission Error Handler) ---
 def onerror(func, path, exc_info):
@@ -27,6 +26,37 @@ def onerror(func, path, exc_info):
         func(path)
     else:
         raise
+        
+# 🚀 新增 (NEW): 用於應用補丁的輔助函數
+# (Helper function for applying patches)
+def _apply_patch(workspace_path: str, patch_str: str) -> bool:
+    """
+    將一個補丁字符串應用到 Git 倉庫。
+    (Applies a patch string to a git repo.)
+    """
+    if not patch_str:
+        print("Warning: Empty patch string provided to _apply_patch.")
+        return False
+    try:
+        # 我們使用 --ignore-whitespace 來提高寬容度
+        # (We use --ignore-whitespace for more tolerance)
+        result = subprocess.run(
+            ['git', 'apply', '--ignore-whitespace'],
+            input=patch_str,
+            cwd=workspace_path,
+            text=True,
+            check=False,
+            capture_output=True,
+            encoding='utf-8'
+        )
+        if result.returncode == 0:
+            return True
+        print(f"ERROR: git apply failed: {result.stderr}")
+        return False
+    except Exception as e:
+        print(f"ERROR: Exception during _apply_patch: {e}")
+        return False
+
 
 # --- 輔助函數 (Helper Functions) ---
 
@@ -58,11 +88,16 @@ def setup_workspace(nocode_bench_id: str) -> str:
         raise IOError(f"File operation failed: {e}")
 
 
-def _run_tests_in_workspace(workspace_path: str, feature_test_string: str) -> tuple[int, int, bool, str]:
+def _run_tests_in_workspace(
+    workspace_path: str, 
+    feature_test_patch: str, 
+    f2p_test_names: list[str], 
+    p2p_test_names: list[str]
+) -> tuple[int, int, bool, str]:
     """
     🚀 更改 (CHANGE): 
-    不再需要 'nocode_bench_id'。接收 'feature_test_string'。
-    (No longer needs 'nocode_bench_id'. Receives 'feature_test_string'.)
+    運行 data.jsonl 中定義的 F2P 和 P2P 測試。
+    (Run the F2P and P2P tests as defined in data.jsonl.)
     返回 (f2p_passed_count, f2p_total_count, regression_tests_passed, full_log)
     (Returns (f2p_passed_count, f2p_total_count, regression_tests_passed, full_log))
     """
@@ -78,7 +113,8 @@ def _run_tests_in_workspace(workspace_path: str, feature_test_string: str) -> tu
     full_log = []
     
     f2p_passed_count = 0
-    f2p_total_count = 0
+    f2p_total_count = len(f2p_test_names) # 總數是 F2P 列表的長度
+                                          # (Total is the length of the F2P list)
     regression_tests_passed = False
     
     try:
@@ -89,7 +125,7 @@ def _run_tests_in_workspace(workspace_path: str, feature_test_string: str) -> tu
         log_stderr = result.stderr.decode('utf-8', errors='replace')
         full_log.append(f"--- Venv Creation ---\n{log_stdout}\n{log_stderr}")
         if result.returncode != 0:
-            return 0, 0, False, f"Failed to create venv.\n{log_stderr}"
+            return 0, f2p_total_count, False, f"Failed to create venv.\n{log_stderr}"
 
         # 2a. 安裝現代測試套件 + json-report
         # (Install modern test suite + json-report)
@@ -102,7 +138,7 @@ def _run_tests_in_workspace(workspace_path: str, feature_test_string: str) -> tu
         full_log.append(f"--- Dependency Installation (Step 1/2) ---\n{log_stdout}\n{log_stderr}")
         if result.returncode != 0:
             full_log.append("FATAL: Step 1/2 failed, aborting test run.")
-            return 0, 0, False, "\n".join(full_log)
+            return 0, f2p_total_count, False, "\n".join(full_log)
 
         # 2b. 安裝專案本身 (Install project itself)
         if os.path.exists(os.path.join(workspace_path, 'setup.py')):
@@ -115,23 +151,21 @@ def _run_tests_in_workspace(workspace_path: str, feature_test_string: str) -> tu
             if result_no_test.returncode != 0:
                  print(f"WARNING: Fallback 'pip install -e .' failed. {result_no_test.stderr}")
 
-        # 3. 🚀 更改 (CHANGE): 將新功能測試字符串寫入文件
-        # (Write the new feature test string to a file)
-        feature_test_dest_path = os.path.join(workspace_path, 'test_new_feature.py')
-        try:
-            with open(feature_test_dest_path, 'w', encoding='utf-8') as f:
-                f.write(feature_test_string)
-            print(f"Wrote feature test to {feature_test_dest_path}")
-        except Exception as e:
-            full_log.append(f"FATAL: Failed to write feature test file: {e}")
-            return 0, 0, False, "\n".join(full_log)
+        # 3. 🚀 更改 (CHANGE): 應用 'test_patch'
+        # (Apply the 'test_patch')
+        print(f"Applying ground-truth test patch...")
+        if not _apply_patch(workspace_path, feature_test_patch):
+             full_log.append(f"FATAL: Failed to apply ground-truth test patch (test_patch).")
+             return 0, f2p_total_count, False, "\n".join(full_log)
 
-
-        # 4. 運行測試 1：新功能測試 (帶 JSON 報告)
-        # (Run Test 1: The Feature Test (with JSON report))
-        print("Running pytest (Test 1: Feature Test)...")
+        # 4. 🚀 更改 (CHANGE): 運行測試 1：F2P 測試 (帶 JSON 報告)
+        # (Run Test 1: The F2P Tests (with JSON report))
+        print(f"Running pytest (Test 1: {f2p_total_count} Feature Tests)...")
         f2p_report_file = os.path.join(workspace_path, 'f2p_report.json')
-        pytest_cmd_feature = [python_executable, '-m', 'pytest', 'test_new_feature.py', '--json-report', f'--json-report-file={f2p_report_file}']
+        # 將測試名稱列表作為參數傳遞
+        # (Pass the list of test names as arguments)
+        pytest_cmd_feature = [python_executable, '-m', 'pytest', '--json-report', f'--json-report-file={f2p_report_file}'] + f2p_test_names
+        
         result_feature = subprocess.run(pytest_cmd_feature, cwd=workspace_path, capture_output=True, check=False, timeout=300)
         log_stdout = result_feature.stdout.decode('utf-8', errors='replace')
         log_stderr = result_feature.stderr.decode('utf-8', errors='replace')
@@ -140,22 +174,28 @@ def _run_tests_in_workspace(workspace_path: str, feature_test_string: str) -> tu
         try:
             with open(f2p_report_file, 'r') as f:
                 report = json.load(f)
-                f2p_total_count = report.get('summary', {}).get('total', 0)
                 f2p_passed_count = report.get('summary', {}).get('passed', 0)
             print(f"Feature test results: {f2p_passed_count} / {f2p_total_count} passed.")
         except Exception as e:
             print(f"ERROR: Could not parse f2p_report.json: {e}")
             full_log.append(f"ERROR: Could not parse f2p_report.json: {e}")
 
-        # 5. 運行測試 2：迴歸測試 (Run Test 2: The Regression Tests)
-        print("Running pytest (Test 2: Regression Tests)...")
-        pytest_cmd_regression = [python_executable, '-m', 'pytest', '--ignore=test_new_feature.py'] 
-        result_regression = subprocess.run(pytest_cmd_regression, cwd=workspace_path, capture_output=True, check=False, timeout=300)
-        log_stdout = result_regression.stdout.decode('utf-8', errors='replace')
-        log_stderr = result_regression.stderr.decode('utf-8', errors='replace')
-        full_log.append(f"--- Pytest Execution (Regression Tests) ---\n{log_stdout}\n{log_stderr}")
-        regression_tests_passed = (result_regression.returncode == 0)
-        print(f"Regression tests passed: {regression_tests_passed}")
+        # 5. 🚀 更改 (CHANGE): 運行測試 2：P2P 迴歸測試
+        # (Run Test 2: The P2P Regression Tests)
+        p2p_total_count = len(p2p_test_names)
+        if p2p_total_count > 0:
+            print(f"Running pytest (Test 2: {p2p_total_count} Regression Tests)...")
+            pytest_cmd_regression = [python_executable, '-m', 'pytest'] + p2p_test_names
+            result_regression = subprocess.run(pytest_cmd_regression, cwd=workspace_path, capture_output=True, check=False, timeout=300)
+            log_stdout = result_regression.stdout.decode('utf-8', errors='replace')
+            log_stderr = result_regression.stderr.decode('utf-8', errors='replace')
+            full_log.append(f"--- Pytest Execution (Regression Tests) ---\n{log_stdout}\n{log_stderr}")
+            regression_tests_passed = (result_regression.returncode == 0)
+            print(f"Regression tests passed: {regression_tests_passed}")
+        else:
+            print("No regression tests (P2P tests) found for this instance. Setting RT% to 100%.")
+            regression_tests_passed = True # 如果沒有 P2P 測試，則視為 100% 通過
+                                           # (If no P2P tests, counts as 100% pass)
 
         # 6. 返回兩個結果 (Return both results)
         return f2p_passed_count, f2p_total_count, regression_tests_passed, "\n".join(full_log)
@@ -174,22 +214,20 @@ def _get_relevant_files_from_llm(model, doc_change: str, workspace_path: str) ->
     (This function is unchanged)
     """
     all_files = []
+    # ... (此函數的其餘部分保持不變) ...
     for root, _, files in os.walk(workspace_path):
         if '.git' in root or 'docs' in root or '.venv' in root or 'venv' in root: continue
         for file in files:
             if file.endswith(('.py', '.html', '.css', '.js', 'setup.py', 'requirements.txt')):
                 rel_path = os.path.relpath(os.path.join(root, file), workspace_path)
                 all_files.append(rel_path.replace('\\', '/'))
-    
     if not all_files:
         print(f"[Task] WARNING: os.walk found NO files in {workspace_path}")
         return []
-
     file_list_str = ', '.join(all_files).replace('\\', '/')
     if not file_list_str:
         print(f"[Task] WARNING: No code files found to analyze.")
         return []
-
     prompt = (
         f"You are a file locator agent. Based on the documentation change below, identify the most relevant CODE files to modify from the provided file list.\n\n"
         f"**DOCUMENTATION CHANGE:**\n{doc_change}\n\n"
@@ -201,7 +239,6 @@ def _get_relevant_files_from_llm(model, doc_change: str, workspace_path: str) ->
         "}\n"
         "Include ONLY files from the list provided. If no files are relevant, return an empty list: {\"files\": []}."
     )
-    
     response_text = None
     try:
         response = model.generate_content(
@@ -239,6 +276,7 @@ def _get_file_contexts(workspace_path: str, relevant_files: list[str]) -> str:
     (This function is unchanged)
     """
     context_prompt_parts = []
+    # ... (此函數的其餘部分保持不變) ...
     for file_path in relevant_files:
         full_path = os.path.join(workspace_path, file_path)
         if not os.path.exists(full_path):
@@ -262,6 +300,7 @@ def _parse_v7_response(raw_response_text: str) -> dict[str, str]:
     (This function is unchanged)
     """
     modified_files = {}
+    # ... (此函數的其餘部分保持不變) ...
     file_chunks = re.split(r'--- START OF FILE: (.*?) ---\n', raw_response_text)
     if len(file_chunks) < 2:
         raise ValueError("AI response did not contain any '--- START OF FILE: ' delimiters.")
@@ -323,8 +362,8 @@ def calculate_all_metrics(
     run_time_seconds: float
 ) -> dict:
     """
-    (此函數與 V14 版本完全相同)
-    (This function is identical to the V14 version)
+    (此函數與 V14/V19 版本完全相同)
+    (This function is identical to the V14/V19 version)
     """
     
     # 1. Success% 和 RT%
@@ -361,7 +400,14 @@ def calculate_all_metrics(
 
 # --- 核心 Agent 工作函數 (Core Agent Worker Function) ---
 
-def run_agent_attempt(workspace_path: str, model, prompt_text: str, feature_test_string: str) -> dict: # 🚀 更改 (CHANGE)
+def run_agent_attempt(
+    workspace_path: str, 
+    model, 
+    prompt_text: str, 
+    feature_test_patch: str,  # 🚀 新增 (NEW)
+    f2p_test_names: list[str],  # 🚀 新增 (NEW)
+    p2p_test_names: list[str]   # 🚀 新增 (NEW)
+) -> dict:
     """
     運行一次 Agent 嘗試：重置、編碼、寫入、差異比較、測試。
     (Runs one agent attempt: reset, code, write, diff, test.)
@@ -421,11 +467,13 @@ def run_agent_attempt(workspace_path: str, model, prompt_text: str, feature_test
                 'regression_tests_passed': False,
             }
 
-        # 5. 🚀 更改 (CHANGE): 傳入 feature_test_string
-        # (Pass in the feature_test_string)
+        # 5. 🚀 更改 (CHANGE): 運行兩種測試
+        # (Run both test types)
         f2p_passed_count, f2p_total_count, regression_tests_passed, test_output = _run_tests_in_workspace(
             workspace_path, 
-            feature_test_string
+            feature_test_patch,
+            f2p_test_names,
+            p2p_test_names
         )
         
         if f2p_total_count > 0 and f2p_passed_count == f2p_total_count:
