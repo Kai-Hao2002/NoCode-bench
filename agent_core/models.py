@@ -16,6 +16,8 @@ class EvaluationTask(models.Model):
     doc_change_input = models.TextField(help_text="The documentation change instruction.")
     
     ground_truth_patch = models.TextField(help_text="The ground-truth diff patch from the dataset.", null=True, blank=True)
+
+    feature_test = models.TextField(help_text="The code for the new feature test (test.py).")
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     celery_task_id = models.CharField(max_length=255, null=True, blank=True)

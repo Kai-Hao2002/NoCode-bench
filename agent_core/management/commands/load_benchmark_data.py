@@ -1,67 +1,64 @@
+# agent_core/management/commands/load_benchmark_data.py
 import os
 import json
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.conf import settings
 from agent_core.models import EvaluationTask
 
-# 數據集文件的確切路徑
-DATA_FILE_PATH = os.path.join(settings.BASE_DIR, 'NoCode-bench_Verified', 'test', 'data.jsonl') 
-
 class Command(BaseCommand):
-    help = 'Loads the NoCode-bench verified (test) dataset from test/data.jsonl'
+    help = 'Loads the 114 instances from NoCode-bench_Verified/test/data.jsonl into the database.'
 
-    def handle(self, *args, **kwargs):
-        self.stdout.write(self.style.SUCCESS(f'Starting data ingestion from {DATA_FILE_PATH}...'))
+    def handle(self, *args, **options):
+        # 🚀 這是 NoCode-bench_Verified/test/data.jsonl 的正確路徑
+        # (This is the correct path to NoCode-bench_Verified/test/data.jsonl)
+        JSONL_PATH = os.path.join(settings.BASE_DIR, 'NoCode-bench_Verified', 'test', 'data.jsonl')
         
-        if not os.path.exists(DATA_FILE_PATH):
-            self.stderr.write(self.style.ERROR(f'Data file not found: {DATA_FILE_PATH}'))
-            self.stderr.write(self.style.ERROR('Please ensure "NoCode-bench_Verified/test/data.jsonl" exists in the project root.'))
-            return
+        if not os.path.exists(JSONL_PATH):
+            raise CommandError(f"Dataset file not found at: {JSONL_PATH}")
 
-        total_tasks_created = 0
-        total_tasks_updated = 0
+        self.stdout.write("Deleting old tasks...")
+        EvaluationTask.objects.all().delete()
+        self.stdout.write("Old tasks deleted.")
 
-        # 讀取這一個 .jsonl 檔案
+        count = 0
+        self.stdout.write(f"Loading instances from {JSONL_PATH}...")
+
         try:
-            with open(DATA_FILE_PATH, 'r', encoding='utf-8') as f:
-                for line_number, line in enumerate(f, 1):
+            with open(JSONL_PATH, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    
                     try:
                         data = json.loads(line)
                         
-                        # --- 這是修改過的部分 ---
-                        # 從 JSON 中提取數據
-                        repo_name = data.get('repo')             # <-- 修改
-                        instance_id = data.get('instance_id')    # <-- 修改
-                        prompt_input = data.get('problem_statement') # <-- 修改
+                        # 🚀 這是 data.jsonl 中的正確欄位
+                        # (These are the correct fields from data.jsonl)
+                        nocode_bench_id = data.get('id')
+                        doc_change = data.get('doc_change')
+                        ground_truth_patch = data.get('solution_patch')
+                        feature_test = data.get('test') # 'test' 欄位包含 test.py 程式碼
+                                                        # (The 'test' field has the test.py code)
 
-                        if not (repo_name and instance_id and prompt_input):
-                            self.stderr.write(self.style.ERROR(f'Missing "repo", "instance_id", or "problem_statement" in line {line_number}'))
+                        if not all([nocode_bench_id, doc_change, ground_truth_patch, feature_test]):
+                            self.stdout.write(self.style.WARNING(f"Skipping instance: missing required fields."))
                             continue
                         
-                        # 構建唯一的 nocode_bench_id (使用 "instance_id")
-                        bench_id = instance_id
-
-                        # 創建或更新任務
-                        task, created = EvaluationTask.objects.update_or_create(
-                            nocode_bench_id=bench_id,
-                            defaults={
-                                'doc_change_input': prompt_input, # 儲存 "problem_statement"
-                                'status': 'PENDING'
-                            }
+                        EvaluationTask.objects.create(
+                            nocode_bench_id=nocode_bench_id,
+                            doc_change_input=doc_change,
+                            ground_truth_patch=ground_truth_patch,
+                            feature_test=feature_test, # 🚀 儲存新功能測試
+                                                      # (Save the new feature test)
+                            status='PENDING'
                         )
-                        # --- 修改結束 ---
-                        
-                        if created:
-                            total_tasks_created += 1
-                        else:
-                            total_tasks_updated += 1
-
+                        count += 1
                     except json.JSONDecodeError:
-                        self.stderr.write(self.style.ERROR(f'Failed to decode JSON on line {line_number}'))
+                        self.stdout.write(self.style.WARNING(f"Skipping invalid JSON line: {line[:50]}..."))
+                    except Exception as e:
+                         self.stdout.write(self.style.ERROR(f"Failed to load instance: {e}"))
 
         except Exception as e:
-            self.stderr.write(self.style.ERROR(f'Error reading file {DATA_FILE_PATH}: {e}'))
+            raise CommandError(f"Failed to read data.jsonl file: {e}")
 
-        self.stdout.write(self.style.SUCCESS('Data ingestion complete.'))
-        self.stdout.write(self.style.SUCCESS(f'Total tasks created: {total_tasks_created}'))
-        self.stdout.write(self.style.SUCCESS(f'Total tasks updated: {total_tasks_updated}'))
+        self.stdout.write(self.style.SUCCESS(f"Successfully loaded {count} tasks."))

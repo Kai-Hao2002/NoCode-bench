@@ -70,8 +70,8 @@ def _build_prompt_for_attempt(doc_change: str, context_content_str: str, history
 @shared_task(bind=True)
 def process_evaluation_task(self, task_id):
     """
-    (此函數的大部分內容保持不變，除了 'EvaluationResult.objects.create' 調用)
-    (Most of this function is unchanged, except the 'EvaluationResult.objects.create' call)
+    (此函數與 V16 版本幾乎相同)
+    (This function is almost identical to V16)
     """
     
     MAX_ATTEMPTS = 3
@@ -100,7 +100,7 @@ def process_evaluation_task(self, task_id):
         if not settings.GEMINI_API_KEY:
             raise Exception("Gemini client not configured. Check GEMINI_API_KEY.")
         genai.configure(api_key=settings.GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-2.5-pro')
+        model = genai.GenerativeModel('gemini-1.0-pro')
         workspace_path = setup_workspace(task.nocode_bench_id)
         
         relevant_files = _get_relevant_files_from_llm(model, task.doc_change_input, workspace_path)
@@ -124,11 +124,13 @@ def process_evaluation_task(self, task_id):
             
             prompt_text = _build_prompt_for_attempt(task.doc_change_input, context_content_str, history)
             
+            # 🚀 更改 (CHANGE): 傳入 task.feature_test
+            # (Pass in task.feature_test)
             attempt_result = run_agent_attempt(
                 workspace_path=workspace_path,
                 model=model,
                 prompt_text=prompt_text,
-                nocode_bench_id=task.nocode_bench_id
+                feature_test_string=task.feature_test # 🚀 更改 (CHANGE)
             )
             
             attempt = EvaluationAttempt.objects.create(
@@ -184,9 +186,8 @@ def process_evaluation_task(self, task_id):
             run_time_seconds=run_time
         )
         
-        # 🚀 修正 (THE KEY FIX): 
-        # 移除了 'fv_micro' 參數，因為它已不存在於 'models.py' 中
-        # (Removed the 'fv_micro' argument, as it no longer exists in 'models.py')
+        # (此 'create' 調用與 V16 相同)
+        # (This 'create' call is identical to V16)
         EvaluationResult.objects.create(
             task=task,
             success_percent=metrics.get('success_percent', 0.0),

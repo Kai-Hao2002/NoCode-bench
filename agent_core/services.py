@@ -17,10 +17,8 @@ from io import StringIO
 ROOT_WORKSPACE = os.path.join(settings.BASE_DIR, 'nocode_workspaces')
 os.makedirs(ROOT_WORKSPACE, exist_ok=True)
 ORIGINAL_DATASET_ROOT = os.path.join(settings.BASE_DIR, 'NoCode-bench_Verified', 'data')
-# 🚀 新增 (NEW): 測試文件的來源
-# (Source for test files)
-TEST_DATASET_ROOT = os.path.join(settings.BASE_DIR, 'NoCode-bench_Verified', 'test')
-
+# 🚀 移除 (REMOVED): 不再需要 TEST_DATASET_ROOT
+# (TEST_DATASET_ROOT is no longer needed)
 
 # --- 權限錯誤處理 (Permission Error Handler) ---
 def onerror(func, path, exc_info):
@@ -60,13 +58,12 @@ def setup_workspace(nocode_bench_id: str) -> str:
         raise IOError(f"File operation failed: {e}")
 
 
-def _run_tests_in_workspace(workspace_path: str, nocode_bench_id: str) -> tuple[int, int, bool, str]:
+def _run_tests_in_workspace(workspace_path: str, feature_test_string: str) -> tuple[int, int, bool, str]:
     """
     🚀 更改 (CHANGE): 
-    運行兩種測試：新功能測試 (test.py) 和迴歸測試 (pytest)。
+    不再需要 'nocode_bench_id'。接收 'feature_test_string'。
+    (No longer needs 'nocode_bench_id'. Receives 'feature_test_string'.)
     返回 (f2p_passed_count, f2p_total_count, regression_tests_passed, full_log)
-    
-    (Run both tests: the new feature test (test.py) and regression tests (pytest).)
     (Returns (f2p_passed_count, f2p_total_count, regression_tests_passed, full_log))
     """
     venv_path = os.path.join(workspace_path, 'venv')
@@ -80,7 +77,6 @@ def _run_tests_in_workspace(workspace_path: str, nocode_bench_id: str) -> tuple[
 
     full_log = []
     
-    # 最終結果 (Final results)
     f2p_passed_count = 0
     f2p_total_count = 0
     regression_tests_passed = False
@@ -95,7 +91,7 @@ def _run_tests_in_workspace(workspace_path: str, nocode_bench_id: str) -> tuple[
         if result.returncode != 0:
             return 0, 0, False, f"Failed to create venv.\n{log_stderr}"
 
-        # 2a. 🚀 更改 (CHANGE): 安裝現代測試套件 + json-report
+        # 2a. 安裝現代測試套件 + json-report
         # (Install modern test suite + json-report)
         print("Installing modern test dependencies (pytest, trustme, pytest-json-report)...")
         deps_to_install = ['pytest', 'trustme', 'pytest-json-report']
@@ -119,16 +115,19 @@ def _run_tests_in_workspace(workspace_path: str, nocode_bench_id: str) -> tuple[
             if result_no_test.returncode != 0:
                  print(f"WARNING: Fallback 'pip install -e .' failed. {result_no_test.stderr}")
 
-        # 3. 複製新功能測試文件 (Copy the new feature test file)
-        feature_test_src_path = os.path.join(TEST_DATASET_ROOT, nocode_bench_id, 'test.py')
+        # 3. 🚀 更改 (CHANGE): 將新功能測試字符串寫入文件
+        # (Write the new feature test string to a file)
         feature_test_dest_path = os.path.join(workspace_path, 'test_new_feature.py')
-        if not os.path.exists(feature_test_src_path):
-            full_log.append(f"FATAL: Feature test file not found at {feature_test_src_path}")
+        try:
+            with open(feature_test_dest_path, 'w', encoding='utf-8') as f:
+                f.write(feature_test_string)
+            print(f"Wrote feature test to {feature_test_dest_path}")
+        except Exception as e:
+            full_log.append(f"FATAL: Failed to write feature test file: {e}")
             return 0, 0, False, "\n".join(full_log)
-        shutil.copy(feature_test_src_path, feature_test_dest_path)
-        print(f"Copied feature test file to {feature_test_dest_path}")
 
-        # 4. 🚀 運行測試 1：新功能測試 (帶 JSON 報告)
+
+        # 4. 運行測試 1：新功能測試 (帶 JSON 報告)
         # (Run Test 1: The Feature Test (with JSON report))
         print("Running pytest (Test 1: Feature Test)...")
         f2p_report_file = os.path.join(workspace_path, 'f2p_report.json')
@@ -138,8 +137,6 @@ def _run_tests_in_workspace(workspace_path: str, nocode_bench_id: str) -> tuple[
         log_stderr = result_feature.stderr.decode('utf-8', errors='replace')
         full_log.append(f"--- Pytest Execution (Feature Test) ---\n{log_stdout}\n{log_stderr}")
         
-        # 🚀 新增 (NEW): 解析 F2P 測試計數
-        # (Parse F2P test counts)
         try:
             with open(f2p_report_file, 'r') as f:
                 report = json.load(f)
@@ -283,7 +280,6 @@ def _parse_v7_response(raw_response_text: str) -> dict[str, str]:
 
 # --- 指標計算 (Metrics Calculation) ---
 # (parse_patch 和 calculate_f1_score 保持不變)
-# (parse_patch and calculate_f1_score are unchanged)
 def parse_patch(patch_str: str) -> dict[str, set[int]]:
     if not patch_str: return {}
     try:
@@ -318,38 +314,28 @@ def calculate_f1_score(pred_set: set, gold_set: set) -> float:
     return f1
 
 def calculate_all_metrics(
-    f2p_passed_count: int,       # 🚀 更改 (CHANGE)
-    f2p_total_count: int,        # 🚀 更改 (CHANGE)
-    regression_tests_passed: bool, # 🚀 更改 (CHANGE)
+    f2p_passed_count: int,
+    f2p_total_count: int,
+    regression_tests_passed: bool,
     applied_successfully: bool, 
     generated_patch: str, 
     ground_truth_patch: str, 
     run_time_seconds: float
 ) -> dict:
     """
-    計算 NoCode-bench 所需的全套指標。
-    (Calculates the full suite of metrics required by NoCode-bench.)
+    (此函數與 V14 版本完全相同)
+    (This function is identical to the V14 version)
     """
     
-    # 1. 🚀 更改 (CHANGE): 指標計算
-    # (Metric Calculations)
-    
-    # Success% = 新功能測試是否 100% 通過？ 
-    # (Are new feature tests 100% passed?)
+    # 1. Success% 和 RT%
     success_percent = 100.0 if (f2p_passed_count == f2p_total_count and f2p_total_count > 0) else 0.0
-    
-    # RT% = 迴歸測試是否 100% 通過？ 
-    # (Are regression tests 100% passed?)
     rt_percent = 100.0 if regression_tests_passed else 0.0
-    
     applied_percent = 100.0 if applied_successfully else 0.0
 
-    # 2. FV-Macro (每個實例) [cite: 461]
-    # (FV-Macro (per-instance))
+    # 2. FV-Macro (每個實例)
     fv_macro = 100.0 * (f2p_passed_count / f2p_total_count) if f2p_total_count > 0 else 0.0
 
-    # 3. File% (精確率) [cite: 379]
-    # (File% (Precision))
+    # 3. File% (精確率)
     pred_files_lines = parse_patch(generated_patch)
     gold_files_lines = parse_patch(ground_truth_patch)
     pred_file_set = set(pred_files_lines.keys())
@@ -359,28 +345,23 @@ def calculate_all_metrics(
     if len(pred_file_set) == 0:
         file_percent = 100.0 if len(gold_file_set) == 0 else 0.0
     else:
-        # TP / (TP + FP) or TP / len(pred_set)
         file_percent = (file_intersection / len(pred_file_set)) * 100.0
 
     return {
         'success_percent': success_percent,
         'applied_percent': applied_percent,
         'rt_percent': rt_percent,
-        'fv_micro': 0.0, # 將在 summary API 中計算 [cite: 459]
-                         # (Will be calculated in summary API)
-        'fv_macro': fv_macro, # 每個實例的 FV-Macro [cite: 461]
-                              # (Per-instance FV-Macro)
+        'fv_macro': fv_macro,
         'file_percent': file_percent,
-        'num_token': len(generated_patch.split()),      # [cite: 377]
-        'run_time_seconds': run_time_seconds,         # 運行時間
-                                                      # (Runtime)
-        'f2p_passed_count': f2p_passed_count,         # 🚀 新增 (NEW)
-        'f2p_total_count': f2p_total_count,           # 🚀 新增 (NEW)
+        'num_token': len(generated_patch.split()),
+        'run_time_seconds': run_time_seconds,
+        'f2p_passed_count': f2p_passed_count,
+        'f2p_total_count': f2p_total_count,
     }
 
 # --- 核心 Agent 工作函數 (Core Agent Worker Function) ---
 
-def run_agent_attempt(workspace_path: str, model, prompt_text: str, nocode_bench_id: str) -> dict: # 🚀 更改 (CHANGE)
+def run_agent_attempt(workspace_path: str, model, prompt_text: str, feature_test_string: str) -> dict: # 🚀 更改 (CHANGE)
     """
     運行一次 Agent 嘗試：重置、編碼、寫入、差異比較、測試。
     (Runs one agent attempt: reset, code, write, diff, test.)
@@ -404,10 +385,8 @@ def run_agent_attempt(workspace_path: str, model, prompt_text: str, nocode_bench
         except Exception as e:
             print(f"ERROR: AI response parsing failed: {e}\nRaw Response: {raw_response_text[:1000]}")
             return {
-                'status': 'APPLY_FAILED',
-                'error': f"AI response parsing failed: {e}",
-                'patch': '',
-                'raw_response': raw_response_text,
+                'status': 'APPLY_FAILED', 'error': f"AI response parsing failed: {e}",
+                'patch': '', 'raw_response': raw_response_text,
                 'f2p_passed_count': 0, 'f2p_total_count': 0, 'regression_tests_passed': False
             }
 
@@ -421,10 +400,8 @@ def run_agent_attempt(workspace_path: str, model, prompt_text: str, nocode_bench
                     f.write(new_content)
             except Exception as e:
                  return {
-                    'status': 'APPLY_FAILED',
-                    'error': f"Failed to write file {file_path} to disk: {e}",
-                    'patch': '',
-                    'raw_response': raw_response_text,
+                    'status': 'APPLY_FAILED', 'error': f"Failed to write file {file_path} to disk: {e}",
+                    'patch': '', 'raw_response': raw_response_text,
                     'f2p_passed_count': 0, 'f2p_total_count': 0, 'regression_tests_passed': False
                 }
 
@@ -437,44 +414,32 @@ def run_agent_attempt(workspace_path: str, model, prompt_text: str, nocode_bench
         
         if not final_patch_str:
              return {
-                'status': 'TEST_FAILED',
-                'patch': '',
+                'status': 'TEST_FAILED', 'patch': '',
                 'test_output': 'AI agent produced no code changes.',
                 'raw_response': raw_response_text,
-                'f2p_passed_count': 0,
-                'f2p_total_count': 0,
+                'f2p_passed_count': 0, 'f2p_total_count': 0,
                 'regression_tests_passed': False,
             }
 
-        # 5. 🚀 更改 (CHANGE): 運行兩種測試
-        # (Run both test types)
+        # 5. 🚀 更改 (CHANGE): 傳入 feature_test_string
+        # (Pass in the feature_test_string)
         f2p_passed_count, f2p_total_count, regression_tests_passed, test_output = _run_tests_in_workspace(
             workspace_path, 
-            nocode_bench_id
+            feature_test_string
         )
         
-        # 🚀 更改 (CHANGE): 根據 f2p 計數決定狀態
-        # (Determine status based on f2p counts)
         if f2p_total_count > 0 and f2p_passed_count == f2p_total_count:
-            # 100% 通過新功能測試 
-            # (100% pass on new feature tests)
             return {
-                'status': 'PASSED',
-                'patch': final_patch_str,
-                'test_output': test_output,
-                'raw_response': raw_response_text,
+                'status': 'PASSED', 'patch': final_patch_str,
+                'test_output': test_output, 'raw_response': raw_response_text,
                 'f2p_passed_count': f2p_passed_count,
                 'f2p_total_count': f2p_total_count,
                 'regression_tests_passed': regression_tests_passed,
             }
         else:
-            # 未能通過所有新功能測試
-            # (Failed to pass all new feature tests)
             return {
-                'status': 'TEST_FAILED',
-                'patch': final_patch_str,
-                'test_output': test_output,
-                'raw_response': raw_response_text,
+                'status': 'TEST_FAILED', 'patch': final_patch_str,
+                'test_output': test_output, 'raw_response': raw_response_text,
                 'f2p_passed_count': f2p_passed_count,
                 'f2p_total_count': f2p_total_count,
                 'regression_tests_passed': regression_tests_passed,
