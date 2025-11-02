@@ -185,17 +185,13 @@ def process_evaluation_task(self, task_id):
         )
         
         # 🚀 修正 (THE KEY FIX): 
-        # 確保 'EvaluationResult.objects.create' 調用
-        # 與 'models.py' 和 'services.py' 中的 V14 更改完全匹配。
-        # (Ensure the 'EvaluationResult.objects.create' call
-        # perfectly matches the V14 changes in 'models.py' and 'services.py'.)
+        # 移除了 'fv_micro' 參數，因為它已不存在於 'models.py' 中
+        # (Removed the 'fv_micro' argument, as it no longer exists in 'models.py')
         EvaluationResult.objects.create(
             task=task,
             success_percent=metrics.get('success_percent', 0.0),
             applied_percent=metrics.get('applied_percent', 0.0),
             rt_percent=metrics.get('rt_percent', 0.0),
-            fv_micro=0.0, # 這是故意的！我們在 'views.py' 中全局計算它
-                          # (This is intentional! We calculate it globally in 'views.py')
             fv_macro=metrics.get('fv_macro', 0.0),
             file_percent=metrics.get('file_percent', 0.0),
             num_token=metrics.get('num_token', 0),

@@ -3,10 +3,9 @@ from rest_framework import serializers
 from .models import EvaluationTask, EvaluationResult
 
 class TaskStartSerializer(serializers.Serializer):
-    # 只需要傳入要執行的實例 ID
-    # 我們將使用這個 ID 來 "查找" 數據庫中的任務
+    # Simply pass in the instance ID to be executed
+    # We will use this ID to "find" the task in the database
     nocode_bench_id = serializers.CharField(max_length=255) 
-    # doc_change_input 已被移除
 
 class EvaluationResultSerializer(serializers.ModelSerializer):
     class Meta:
@@ -14,7 +13,7 @@ class EvaluationResultSerializer(serializers.ModelSerializer):
         exclude = ('id', 'task')
 
 class EvaluationTaskSerializer(serializers.ModelSerializer):
-    result = EvaluationResultSerializer(read_only=True) # 巢狀序列化結果
+    result = EvaluationResultSerializer(read_only=True) 
 
     class Meta:
         model = EvaluationTask

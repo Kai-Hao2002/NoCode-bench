@@ -14,6 +14,3 @@ class EvaluationTaskAdmin(admin.ModelAdmin):
     inlines = (EvaluationResultInline,)
     readonly_fields = ('start_time', 'end_time', 'celery_task_id')
 
-# 註：由於 EvaluationResult 是透過 Inline 顯示的，所以不需要單獨註冊。
-# 如果您也想單獨訪問它，可以取消註釋下一行：
-# admin.site.register(EvaluationResult)
