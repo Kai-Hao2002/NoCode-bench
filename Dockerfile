@@ -16,12 +16,17 @@ RUN apt-get update && apt-get install -y \
 
 # 4. 設置工作目錄 (Set Workdir)
 WORKDIR /app
+
+# 5. 🚀 優化：僅複製 requirements.txt 並安裝
+# (Optimization: Copy ONLY requirements.txt and install)
+# (這會利用 Docker 的緩存層)
+# (This leverages Docker's cache layer)
+COPY ./requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 6. 複製所有其他內容 (Copy everything else)
 COPY . /app/
 
-# ⬇️ 這些是多餘的 (These are redundant) ⬇️
-# COPY ./NoCode-bench_Verified /app/NoCode-bench_Verified
-# COPY ./requirements.txt /app/requirements.txt
-
-# ⬇️ 這些是必需的 (These are necessary) ⬇️
-RUN pip install --no-cache-dir -r requirements.txt
+# 7. 收集靜態文件 (用於 Django Admin)
+# (Collect Static Files (for Django Admin))
 RUN python manage.py collectstatic --noinput
