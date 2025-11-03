@@ -146,8 +146,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 #local test
-# STATIC_URL = 'static/'
-STATIC_URL = '/static/'
+STATIC_URL = 'static/'
+# STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
@@ -159,16 +159,16 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # --- Celery 設定 ---
 # 假設 Redis 運行在預設位置 (使用 Docker 啟動)
 #local test
-# CELERY_BROKER_URL = 'redis://localhost:6379/0'
-# CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
-CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0')
-CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0')
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+# CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0')
+# CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0')
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 
 # --- Gemini API Key (建議使用環境變數) ---
 #local test
-# GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+#GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 print(f"DEBUG: Gemini Key Load Status: {bool(GEMINI_API_KEY)}")
