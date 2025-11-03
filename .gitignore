@@ -5,3 +5,4 @@ nocode_workspaces/
 NoCode-bench_Verified/
 **/*.pyc
 */__pycache__
+agent_core/migrations/
