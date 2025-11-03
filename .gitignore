@@ -4,3 +4,4 @@ db.sqlite3
 nocode_workspaces/
 NoCode-bench_Verified/
 *.pyc
+__pycache__/
