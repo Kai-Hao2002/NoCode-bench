@@ -129,8 +129,8 @@ def _run_tests_in_workspace(
 
         # 2a. 安裝現代測試套件 + json-report
         # (Install modern test suite + json-report)
-        print("Installing modern test dependencies (pytest, trustme, pytest-json-report)...")
-        deps_to_install = ['pytest', 'trustme', 'pytest-json-report']
+        print("Installing modern test dependencies (pytest, trustme, pytest-json-report, setuptools)...")
+        deps_to_install = ['pytest', 'trustme', 'pytest-json-report', 'setuptools']
         install_cmd = [pip_executable, 'install'] + deps_to_install
         result = subprocess.run(install_cmd, cwd=workspace_path, capture_output=True, check=False)
         log_stdout = result.stdout.decode('utf-8', errors='replace')

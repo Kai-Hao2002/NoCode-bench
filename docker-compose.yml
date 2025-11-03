@@ -8,8 +8,6 @@ services:
     image: postgres:15
     volumes:
       - postgres_data:/var/lib/postgresql/data/
-    # 🚀 從 .env 文件中讀取 Postgres 的憑證
-    # (Read Postgres credentials from .env file)
     env_file:
       - ./.env
     restart: always
@@ -26,7 +24,9 @@ services:
     volumes:
       - static_volume:/app/staticfiles
       - media_volume:/app/media
-      - nocode_dataset:/app/NoCode-bench_Verified
+      # 🚀 'app' 服務可以訪問 'nocode_dataset'
+      # ('app' service has access to 'nocode_dataset')
+      - nocode_dataset:/app/NoCode-bench_Verified 
     expose:
       - 8000
     restart: always
@@ -35,15 +35,17 @@ services:
     depends_on:
       - db
       - redis
-
+  
   # 4. Celery Worker (您的 AI Agent)
   worker:
     build: .
     command: celery -A nocode_project worker --loglevel=info -P gevent --concurrency=1
     volumes:
-      # 🚀 關鍵！將工作區掛載為持久卷
-      # (CRITICAL! Mount the workspace as a persistent volume)
       - nocode_workspaces:/app/nocode_workspaces
+      # 🚀 修正 (THE FIX): 
+      # Worker 也必須掛載 'nocode_dataset' 卷
+      # (The Worker MUST ALSO mount the 'nocode_dataset' volume)
+      - nocode_dataset:/app/NoCode-bench_Verified
     restart: always
     env_file:
       - ./.env
@@ -56,8 +58,7 @@ services:
   nginx:
     image: nginx:latest
     ports:
-      - "80:80" # 將伺服器的 80 端口映射到 Nginx
-                # (Map server port 80 to Nginx)
+      - "80:80"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - static_volume:/app/staticfiles:ro
@@ -71,6 +72,6 @@ volumes:
   postgres_data:
   static_volume:
   media_volume:
-  nocode_workspaces: # 🚀 確保這個持久卷存在
-                     # (Ensure this persistent volume exists)
-  nocode_dataset:
+  nocode_workspaces:
+  nocode_dataset: # (這個卷已經包含了您的數據)
+                  # (This volume already contains your data)
