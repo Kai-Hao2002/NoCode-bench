@@ -29,17 +29,16 @@ def onerror(func, path, exc_info):
         
 # 🚀 新增 (NEW): 用於應用補丁的輔助函數
 # (Helper function for applying patches)
-def _apply_patch(workspace_path: str, patch_str: str) -> bool:
+def _apply_patch(workspace_path: str, patch_str: str) -> tuple[bool, str | None]:
     """
     將一個補丁字符串應用到 Git 倉庫。
     (Applies a patch string to a git repo.)
     """
     if not patch_str:
-        print("Warning: Empty patch string provided to _apply_patch.")
-        return False
+        msg = "Warning: Empty patch string provided to _apply_patch."
+        print(msg)
+        return False, msg # 🚀 更改 (CHANGE)
     try:
-        # 我們使用 --ignore-whitespace 來提高寬容度
-        # (We use --ignore-whitespace for more tolerance)
         result = subprocess.run(
             ['git', 'apply', '--ignore-whitespace'],
             input=patch_str,
@@ -50,12 +49,18 @@ def _apply_patch(workspace_path: str, patch_str: str) -> bool:
             encoding='utf-8'
         )
         if result.returncode == 0:
-            return True
-        print(f"ERROR: git apply failed: {result.stderr}")
-        return False
+            return True, None # 🚀 更改 (CHANGE)
+        
+        # 🚀 更改 (CHANGE): 捕獲錯誤並返回
+        error_msg = f"git apply failed: {result.stderr}"
+        print(f"ERROR: {error_msg}")
+        return False, error_msg
+        
     except Exception as e:
-        print(f"ERROR: Exception during _apply_patch: {e}")
-        return False
+        # 🚀 更改 (CHANGE): 捕獲錯誤並返回
+        error_msg = f"ERROR: Exception during _apply_patch: {e}"
+        print(error_msg)
+        return False, error_msg
 
 
 # --- 輔助函數 (Helper Functions) ---
@@ -136,33 +141,44 @@ def _run_tests_in_workspace(
             full_log.append("FATAL: Step 1/3 failed, aborting test run.")
             return 0, f2p_total_count, False, "\n".join(full_log)
             
-        # 🚀 新增 (NEW): 步驟 2b - 自動安裝專案的測試依賴項
+        # 🚀 更改 (CHANGE): 步驟 2b - 使用 os.walk 遞歸查找依賴檔案
         print("Searching for project-specific test requirements...")
-        # (我們查找常見的測試依賴檔案名稱)
-        dev_req_files = ['requirements-dev.txt','requirements.txt','rtd_requirements.txt','requirements_test_min.txt','requirements_test_pre_commit.txt','requirements_test.txt', 'requirements_test.txt', 'test-requirements.txt', 'requirements-tests.txt', 'dev-requirements.txt']
+        # (將列表轉換為集合 (Set) 以加快查找速度)
+        dev_req_files_set = set(['requirements-dev.txt','requirements.txt','rtd_requirements.txt','requirements_test_min.txt','requirements_test_pre_commit.txt','requirements_test.txt', 'test-requirements.txt', 'requirements-tests.txt', 'dev-requirements.txt'])
         found_dev_req = False
-        for req_file in dev_req_files:
-            req_path = os.path.join(workspace_path, req_file)
-            if os.path.exists(req_path):
-                found_dev_req = True
-                print(f"Found {req_file}. Installing test dependencies...")
-                install_cmd_dev = [pip_executable, 'install', '-r', req_path]
-                result_dev = subprocess.run(install_cmd_dev, cwd=workspace_path, capture_output=True, check=False)
-                log_stdout_dev = result_dev.stdout.decode('utf-8', errors='replace')
-                log_stderr_dev = result_dev.stderr.decode('utf-8', errors='replace')
-                full_log.append(f"--- Dependency Installation (Step 2/3: {req_file}) ---\n{log_stdout_dev}\n{log_stderr_dev}")
-                
-                # 如果安裝失敗，我們只記錄警告，因為它可能包含有衝突的包
-                if result_dev.returncode != 0:
-                    print(f"WARNING: Failed to install some dependencies from {req_file}. {log_stderr_dev}")
-                    full_log.append(f"WARNING: Installation of {req_file} failed. This may or may not be critical.")
-                # 找到一個就跳出，避免重複安裝
-                break 
+        for root, dirs, files in os.walk(workspace_path):
+            # 避免搜索 .git 和 venv 目錄
+            if '.git' in dirs: dirs.remove('.git')
+            if 'venv' in dirs: dirs.remove('venv')
+            
+            if found_dev_req: break # 找到一個就立即停止搜索
+
+            for file_name in files:
+                if file_name in dev_req_files_set:
+                    req_path = os.path.join(root, file_name)
+                    found_dev_req = True
+                    
+                    # (使用相對路徑進行日誌記錄，更清晰)
+                    rel_req_path = os.path.relpath(req_path, workspace_path)
+                    print(f"Found {rel_req_path}. Installing test dependencies...")
+                    
+                    install_cmd_dev = [pip_executable, 'install', '-r', req_path]
+                    result_dev = subprocess.run(install_cmd_dev, cwd=workspace_path, capture_output=True, check=False)
+                    log_stdout_dev = result_dev.stdout.decode('utf-8', errors='replace')
+                    log_stderr_dev = result_dev.stderr.decode('utf-8', errors='replace')
+                    
+                    full_log.append(f"--- Dependency Installation (Step 2/3: {rel_req_path}) ---\n{log_stdout_dev}\n{log_stderr_dev}")
+                    
+                    if result_dev.returncode != 0:
+                        print(f"WARNING: Failed to install some dependencies from {rel_req_path}. {log_stderr_dev}")
+                        full_log.append(f"WARNING: Installation of {rel_req_path} failed. This may or may not be critical.")
+                    
+                    break # 找到一個就跳出內部循環 (files loop)
         
         if not found_dev_req:
             print("No project-specific test requirement files found. Proceeding.")
             full_log.append("--- Dependency Installation (Step 2/3) ---\nNo project-specific test requirements file found.")
-
+            
         # 2c. 安裝專案本身 (原來的 2b)
         if os.path.exists(os.path.join(workspace_path, 'setup.py')):
             print("Found setup.py. Installing package in editable mode...")
@@ -176,8 +192,13 @@ def _run_tests_in_workspace(
 
         # 3. 應用 'test_patch'
         print(f"Applying ground-truth test patch...")
-        if not _apply_patch(workspace_path, feature_test_patch):
-             full_log.append(f"FATAL: Failed to apply ground-truth test patch (test_patch).")
+        # 🚀 更改 (CHANGE): 捕獲元組 (tuple)
+        success, error_msg = _apply_patch(workspace_path, feature_test_patch)
+        
+        if not success:
+             # 🚀 更改 (CHANGE): 將詳細錯誤添加到日誌中
+             log_message = f"FATAL: Failed to apply ground-truth test patch (test_patch).\nDetails: {error_msg}"
+             full_log.append(log_message)
              return 0, f2p_total_count, False, "\n".join(full_log)
 
         # 4. 運行測試 1：F2P 測試 (帶 JSON 報告)
