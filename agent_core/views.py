@@ -4,8 +4,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import EvaluationTask, EvaluationResult 
 from django.db.models import Avg, Count, Sum 
-from .serializers import TaskStartSerializer, EvaluationTaskSerializer
-from .tasks import process_evaluation_task
+from .serializers import TaskStartSerializer, EvaluationTaskSerializer,DemoTaskSerializer,CustomDemoSerializer
+from .tasks import process_evaluation_task, process_custom_demo_task
+import time
 
 class EvaluationTaskViewSet(viewsets.ReadOnlyModelViewSet):
     """提供任務的讀取、狀態查詢和觸發。"""
@@ -129,3 +130,93 @@ class EvaluationTaskViewSet(viewsets.ReadOnlyModelViewSet):
             "progress_percent": round(progress_percent, 2),
             "average_metrics": averages
         })
+    @action(detail=False, methods=['post'], serializer_class=DemoTaskSerializer, url_path='run-demo')
+    def run_demo(self, request):
+        """
+        使用來自用戶的*自定義* doc change,
+        基於*現有*的基準實例來運行新的評估。
+        """
+        serializer = DemoTaskSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        base_id = serializer.validated_data['base_nocode_bench_id']
+        custom_doc = serializer.validated_data['custom_doc_change']
+
+        try:
+            # 1. 查找基礎任務以複製其設置
+            base_task = EvaluationTask.objects.get(nocode_bench_id=base_id)
+        except EvaluationTask.DoesNotExist:
+            return Response(
+                {"error": f"base task '{base_id}' not found。"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # 2. 建立一個新任務 (或找到一個 demo 專用的任務)
+        # 我們添加一個後綴使其唯一
+        demo_nocode_id = f"demo_{base_id}_{time.time()}"
+        
+        new_task = EvaluationTask.objects.create(
+            nocode_bench_id=demo_nocode_id,
+            doc_change_input=custom_doc, # <-- 使用用戶的自定義提示
+
+            base_task_id=base_id,
+            
+            # 從基礎任務複製所有其他數據
+            ground_truth_patch=base_task.ground_truth_patch,
+            feature_test_patch=base_task.feature_test_patch,
+            f2p_test_names=base_task.f2p_test_names,
+            p2p_test_names=base_task.p2p_test_names,
+            
+            status='PENDING'
+        )
+
+        # 3. 啟動 celery 任務
+        celery_result = process_evaluation_task.delay(new_task.id) 
+        new_task.celery_task_id = celery_result.id
+        new_task.save()
+        
+        # 4. 返回新任務的數據
+        return Response(
+            EvaluationTaskSerializer(new_task).data, 
+            status=status.HTTP_202_ACCEPTED
+        )
+    
+    @action(detail=False, methods=['post'], serializer_class=CustomDemoSerializer, url_path='run-custom-repo')
+    def run_custom_repo(self, request):
+        """
+        在一個自定義的 GitHub 倉庫上運行 Agent。
+        """
+        serializer = CustomDemoSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        github_url = serializer.validated_data['github_url']
+        custom_doc = serializer.validated_data['doc_change']
+
+        # 我們「濫用」nocode_bench_id 欄位來儲存 Git URL
+        # 並且使用 'base_task_id' 來標記這是一個自定義任務
+        demo_nocode_id = f"custom_{github_url}#{time.time()}"
+        
+        new_task = EvaluationTask.objects.create(
+            nocode_bench_id=demo_nocode_id,
+            doc_change_input=custom_doc,
+            base_task_id="CUSTOM_REPO_DEMO", # <-- 標記
+            
+            # (所有 NoCode-bench 相關欄位都為空)
+            ground_truth_patch="",
+            feature_test_patch="",
+            f2p_test_names=[],
+            p2p_test_names=[],
+            
+            status='PENDING'
+        )
+
+        # 3. 啟動 *新的* Celery 任務
+        celery_result = process_custom_demo_task.delay(new_task.id) 
+        new_task.celery_task_id = celery_result.id
+        new_task.save()
+        
+        # 4. 返回新任務的數據
+        return Response(
+            EvaluationTaskSerializer(new_task).data, 
+            status=status.HTTP_202_ACCEPTED
+        )

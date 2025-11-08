@@ -18,3 +18,10 @@ class EvaluationTaskSerializer(serializers.ModelSerializer):
     class Meta:
         model = EvaluationTask
         fields = '__all__'
+class DemoTaskSerializer(serializers.Serializer):
+    base_nocode_bench_id = serializers.CharField(max_length=255)
+    custom_doc_change = serializers.CharField()
+
+class CustomDemoSerializer(serializers.Serializer):
+    github_url = serializers.URLField()
+    doc_change = serializers.CharField()

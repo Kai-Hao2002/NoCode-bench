@@ -12,6 +12,7 @@ class EvaluationTask(models.Model):
     ]
 
     # NoCode-bench 實例 ID，用於查找程式碼庫
+    base_task_id = models.CharField(max_length=255, null=True, blank=True, help_text="The base nocode_bench_id for demo tasks.")
     nocode_bench_id = models.CharField(max_length=255, unique=True, help_text="e.g. example-repo/task-001")
     doc_change_input = models.TextField(help_text="The documentation change instruction.")
     

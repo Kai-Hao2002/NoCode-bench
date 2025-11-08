@@ -109,6 +109,7 @@ corresponding code changes so that project tests pass.
 ### Terminal 1: Run the Django Server
 
 ```bash
+git clone https://huggingface.co/datasets/NoCode-bench/NoCode-bench_Verified
 python manage.py setup_codebases
 python manage.py load_benchmark_data
 python manage.py runserver

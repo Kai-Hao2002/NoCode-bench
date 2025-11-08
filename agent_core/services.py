@@ -96,10 +96,8 @@ def _run_tests_in_workspace(
 ) -> tuple[int, int, bool, str]:
     """
     🚀 更改 (CHANGE): 
-    運行 data.jsonl 中定義的 F2P 和 P2P 測試。
-    (Run the F2P and P2P tests as defined in data.jsonl.)
-    返回 (f2p_passed_count, f2p_total_count, regression_tests_passed, full_log)
-    (Returns (f2p_passed_count, f2p_total_count, regression_tests_passed, full_log))
+    此函數現在會自動查找並安裝 test-requirements.txt
+    (This function will now automatically find and install test-requirements.txt)
     """
     venv_path = os.path.join(workspace_path, 'venv')
     
@@ -114,7 +112,6 @@ def _run_tests_in_workspace(
     
     f2p_passed_count = 0
     f2p_total_count = len(f2p_test_names) # 總數是 F2P 列表的長度
-                                          # (Total is the length of the F2P list)
     regression_tests_passed = False
     
     try:
@@ -127,43 +124,65 @@ def _run_tests_in_workspace(
         if result.returncode != 0:
             return 0, f2p_total_count, False, f"Failed to create venv.\n{log_stderr}"
 
-        # 2a. 安裝現代測試套件 + json-report
-        # (Install modern test suite + json-report)
+        # 2a. 安裝核心測試套件
         print("Installing modern test dependencies (pytest, trustme, pytest-json-report, setuptools)...")
         deps_to_install = ['pytest', 'trustme', 'pytest-json-report', 'setuptools']
         install_cmd = [pip_executable, 'install'] + deps_to_install
         result = subprocess.run(install_cmd, cwd=workspace_path, capture_output=True, check=False)
         log_stdout = result.stdout.decode('utf-8', errors='replace')
         log_stderr = result.stderr.decode('utf-8', errors='replace')
-        full_log.append(f"--- Dependency Installation (Step 1/2) ---\n{log_stdout}\n{log_stderr}")
+        full_log.append(f"--- Dependency Installation (Step 1/3) ---\n{log_stdout}\n{log_stderr}")
         if result.returncode != 0:
-            full_log.append("FATAL: Step 1/2 failed, aborting test run.")
+            full_log.append("FATAL: Step 1/3 failed, aborting test run.")
             return 0, f2p_total_count, False, "\n".join(full_log)
+            
+        # 🚀 新增 (NEW): 步驟 2b - 自動安裝專案的測試依賴項
+        print("Searching for project-specific test requirements...")
+        # (我們查找常見的測試依賴檔案名稱)
+        dev_req_files = ['requirements-dev.txt','requirements.txt','rtd_requirements.txt','requirements_test_min.txt','requirements_test_pre_commit.txt','requirements_test.txt', 'requirements_test.txt', 'test-requirements.txt', 'requirements-tests.txt', 'dev-requirements.txt']
+        found_dev_req = False
+        for req_file in dev_req_files:
+            req_path = os.path.join(workspace_path, req_file)
+            if os.path.exists(req_path):
+                found_dev_req = True
+                print(f"Found {req_file}. Installing test dependencies...")
+                install_cmd_dev = [pip_executable, 'install', '-r', req_path]
+                result_dev = subprocess.run(install_cmd_dev, cwd=workspace_path, capture_output=True, check=False)
+                log_stdout_dev = result_dev.stdout.decode('utf-8', errors='replace')
+                log_stderr_dev = result_dev.stderr.decode('utf-8', errors='replace')
+                full_log.append(f"--- Dependency Installation (Step 2/3: {req_file}) ---\n{log_stdout_dev}\n{log_stderr_dev}")
+                
+                # 如果安裝失敗，我們只記錄警告，因為它可能包含有衝突的包
+                if result_dev.returncode != 0:
+                    print(f"WARNING: Failed to install some dependencies from {req_file}. {log_stderr_dev}")
+                    full_log.append(f"WARNING: Installation of {req_file} failed. This may or may not be critical.")
+                # 找到一個就跳出，避免重複安裝
+                break 
+        
+        if not found_dev_req:
+            print("No project-specific test requirement files found. Proceeding.")
+            full_log.append("--- Dependency Installation (Step 2/3) ---\nNo project-specific test requirements file found.")
 
-        # 2b. 安裝專案本身 (Install project itself)
+        # 2c. 安裝專案本身 (原來的 2b)
         if os.path.exists(os.path.join(workspace_path, 'setup.py')):
             print("Found setup.py. Installing package in editable mode...")
             install_cmd_no_test = [pip_executable, 'install', '-e .']
             result_no_test = subprocess.run(install_cmd_no_test, cwd=workspace_path, capture_output=True, check=False)
             log_stdout = result_no_test.stdout.decode('utf-8', errors='replace')
             log_stderr = result_no_test.stderr.decode('utf-8', errors='replace')
-            full_log.append(f"--- Dependency Installation (Step 2/2) ---\n{log_stdout}\n{log_stderr}")
+            full_log.append(f"--- Dependency Installation (Step 3/3) ---\n{log_stdout}\n{log_stderr}")
             if result_no_test.returncode != 0:
                  print(f"WARNING: Fallback 'pip install -e .' failed. {result_no_test.stderr}")
 
-        # 3. 🚀 更改 (CHANGE): 應用 'test_patch'
-        # (Apply the 'test_patch')
+        # 3. 應用 'test_patch'
         print(f"Applying ground-truth test patch...")
         if not _apply_patch(workspace_path, feature_test_patch):
              full_log.append(f"FATAL: Failed to apply ground-truth test patch (test_patch).")
              return 0, f2p_total_count, False, "\n".join(full_log)
 
-        # 4. 🚀 更改 (CHANGE): 運行測試 1：F2P 測試 (帶 JSON 報告)
-        # (Run Test 1: The F2P Tests (with JSON report))
+        # 4. 運行測試 1：F2P 測試 (帶 JSON 報告)
         print(f"Running pytest (Test 1: {f2p_total_count} Feature Tests)...")
         f2p_report_file = os.path.join(workspace_path, 'f2p_report.json')
-        # 將測試名稱列表作為參數傳遞
-        # (Pass the list of test names as arguments)
         pytest_cmd_feature = [python_executable, '-m', 'pytest', '--json-report', f'--json-report-file={f2p_report_file}'] + f2p_test_names
         
         result_feature = subprocess.run(pytest_cmd_feature, cwd=workspace_path, capture_output=True, check=False, timeout=300)
@@ -180,8 +199,7 @@ def _run_tests_in_workspace(
             print(f"ERROR: Could not parse f2p_report.json: {e}")
             full_log.append(f"ERROR: Could not parse f2p_report.json: {e}")
 
-        # 5. 🚀 更改 (CHANGE): 運行測試 2：P2P 迴歸測試
-        # (Run Test 2: The P2P Regression Tests)
+        # 5. 運行測試 2：P2P 迴歸測試
         p2p_total_count = len(p2p_test_names)
         if p2p_total_count > 0:
             print(f"Running pytest (Test 2: {p2p_total_count} Regression Tests)...")
@@ -195,9 +213,8 @@ def _run_tests_in_workspace(
         else:
             print("No regression tests (P2P tests) found for this instance. Setting RT% to 100%.")
             regression_tests_passed = True # 如果沒有 P2P 測試，則視為 100% 通過
-                                           # (If no P2P tests, counts as 100% pass)
 
-        # 6. 返回兩個結果 (Return both results)
+        # 6. 返回兩個結果
         return f2p_passed_count, f2p_total_count, regression_tests_passed, "\n".join(full_log)
 
     except subprocess.TimeoutExpired:
@@ -211,10 +228,9 @@ def _run_tests_in_workspace(
 def _get_relevant_files_from_llm(model, doc_change: str, workspace_path: str) -> list[str]:
     """
     (此函數保持不變)
-    (This function is unchanged)
     """
     all_files = []
-    # ... (此函數的其餘部分保持不變) ...
+    # (os.walk 迴圈保持不變)
     for root, _, files in os.walk(workspace_path):
         if '.git' in root or 'docs' in root or '.venv' in root or 'venv' in root: continue
         for file in files:
@@ -228,16 +244,27 @@ def _get_relevant_files_from_llm(model, doc_change: str, workspace_path: str) ->
     if not file_list_str:
         print(f"[Task] WARNING: No code files found to analyze.")
         return []
+
+    # 🚀 這是新的、更智慧的提示詞
     prompt = (
-        f"You are a file locator agent. Based on the documentation change below, identify the most relevant CODE files to modify from the provided file list.\n\n"
+        f"You are an expert file locator agent. Your goal is to identify ALL files required for a code change, including dependency files.\n\n"
         f"**DOCUMENTATION CHANGE:**\n{doc_change}\n\n"
         f"**CODE FILE LIST:**\n{file_list_str}\n\n"
+        f"**THINKING PROCESS (CRITICAL):**\n"
+        "1.  **Core Logic:** Which file contains the primary code to be modified based on the documentation? (e.g., 'requests/models.py')\n"
+        "2.  **New Symbols:** Does this change introduce new classes, functions, or exceptions? (e.g., 'JSONDecodeError')\n"
+        "3.  **Definition:** Where should this new symbol be *defined*? (e.g., 'requests/exceptions.py')\n"
+        "4.  **Dependencies (The most important step):**\n"
+        "    - **Compatibility:** Is there a `compat.py` file that needs to be updated to handle this new symbol across different Python versions? (e.g., 'requests/compat.py')\n"
+        "    - **Exporting:** Does this new symbol need to be made public? Check the relevant `__init__.py` file. (e.g., 'requests/__init__.py')\n"
+        "    - **Imports:** Which other files *use* the code from step 1 and will now need to import the new symbol from step 3? (e.g., 'requests/models.py' imports from 'requests/exceptions.py')\n\n"
         f"**INSTRUCTIONS:**\n"
-        "Respond ONLY with a JSON object in the following format:\n"
-        "{\n"
-        "  \"files\": [\"path/to/file1.py\", \"path/to/file2.py\"]\n"
-        "}\n"
-        "Include ONLY files from the list provided. If no files are relevant, return an empty list: {\"files\": []}."
+        "1.  Review your thinking process and list ALL files identified in steps 1-4.\n"
+        "2.  Respond ONLY with a JSON object:\n"
+        "   {\n"
+        "     \"files\": [\"path/to/file1.py\", \"path/to/file2.py\", \"path/to/compat.py\", \"path/to/__init__.py\"]\n"
+        "   }\n"
+        "3.  **DO NOT** include any files from `test/` or `tests/` directories."
     )
     response_text = None
     try:
@@ -247,6 +274,7 @@ def _get_relevant_files_from_llm(model, doc_change: str, workspace_path: str) ->
                 response_mime_type="application/json"
             )
         )
+        # (函數的其餘部分保持不變)
         response_text = response.text
         json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
         if not json_match:
@@ -503,3 +531,91 @@ def run_agent_attempt(
             'raw_response': raw_response_text,
             'f2p_passed_count': 0, 'f2p_total_count': 0, 'regression_tests_passed': False
         }
+
+def setup_custom_workspace(github_url: str) -> str:
+    """
+    從一個 Git URL 複製並初始化一個工作區。
+    """
+    run_id = str(time.time()).replace('.', '')
+    # 產生一個唯一的目錄名稱
+    repo_name = github_url.split('/')[-1].replace('.git', '')
+    temp_dir = os.path.join(ROOT_WORKSPACE, f'demo_{repo_name}_{run_id}')
+    
+    try:
+        # 複製 Git 倉庫
+        print(f"Cloning repo from {github_url} into {temp_dir}...")
+        subprocess.run(
+            ['git', 'clone', '--depth', '1', github_url, temp_dir],
+            check=True, capture_output=True, text=True, encoding='utf-8'
+        )
+        
+        # (可選，但推薦) 初始化 Git，以便我們可以 'git diff'
+        subprocess.run(['git', 'init'], cwd=temp_dir, check=True, capture_output=True, text=True, encoding='utf-8')
+        subprocess.run(['git', 'add', '.'], cwd=temp_dir, check=True, capture_output=True, text=True, encoding='utf-8')
+        subprocess.run(['git', 'commit', '-m', 'Initial snapshot', '--allow-empty'], cwd=temp_dir, check=True, capture_output=True, text=True, encoding='utf-8')
+        print(f"Workspace initialized at {temp_dir}")
+        return temp_dir
+        
+    except subprocess.CalledProcessError as e:
+        raise IOError(f"Failed to clone Git repo: {e.stderr}")
+    except Exception as e:
+        raise IOError(f"File operation failed: {e}")
+
+# ... (在 run_agent_attempt 旁邊)
+
+def run_agent_demo_attempt(
+    workspace_path: str, 
+    model, 
+    prompt_text: str
+) -> dict:
+    """
+    運行一次 Agent 嘗試，但 *不執行* 任何測試。
+    (Runs one agent attempt, but does *not* run tests.)
+    """
+    
+    raw_response_text = ""
+    final_patch_str = ""
+    
+    try:
+        # 重置工作區
+        subprocess.run(['git', 'reset', '--hard', 'HEAD'], cwd=workspace_path, capture_output=True, text=True, check=True)
+        
+        # 1. 生成程式碼
+        response = model.generate_content(prompt_text)
+        raw_response_text = response.text
+        
+        # 2. 解析回應
+        try:
+            modified_files = _parse_v7_response(raw_response_text)
+        except Exception as e:
+            print(f"ERROR: AI response parsing failed: {e}")
+            return {'status': 'APPLY_FAILED', 'patch': '', 'raw_response': raw_response_text}
+
+        # 3. 將新內容寫入文件
+        for file_path, new_content in modified_files.items():
+            try:
+                if '..' in file_path: continue
+                full_path = os.path.join(workspace_path, file_path)
+                os.makedirs(os.path.dirname(full_path), exist_ok=True)
+                with open(full_path, 'w', encoding='utf-8') as f:
+                    f.write(new_content)
+            except Exception as e:
+                 return {'status': 'APPLY_FAILED', 'patch': '', 'raw_response': raw_response_text}
+
+        # 4. 生成補丁
+        diff_result = subprocess.run(
+            ['git', 'diff', '--no-prefix'], 
+            cwd=workspace_path, capture_output=True, text=True, check=True, encoding='utf-8'
+        )
+        final_patch_str = diff_result.stdout
+        
+        # 5. 成功返回 (不運行測試)
+        return {
+            'status': 'COMPLETED', # 狀態總是 COMPLETED，因為沒有測試
+            'patch': final_patch_str,
+            'raw_response': raw_response_text,
+        }
+        
+    except Exception as e:
+        print(f"FATAL ERROR in run_agent_demo_attempt: {e}")
+        return {'status': 'APPLY_FAILED', 'patch': '', 'raw_response': raw_response_text}
