@@ -8,7 +8,7 @@ import stat
 import platform
 import json
 from google import generativeai as genai
-from google.generativeai.types import GenerationConfig
+from google.generativeai.types import GenerationConfig, RequestOptions
 from django.conf import settings
 from unidiff import PatchSet
 from io import StringIO
@@ -26,6 +26,45 @@ def onerror(func, path, exc_info):
         func(path)
     else:
         raise
+
+
+# --- 測試名稱格式轉換 (Test Name Format Conversion) ---
+def _convert_test_name_to_pytest_format(test_name: str) -> str:
+    """
+    Convert test name from unittest/Django format to pytest format.
+    
+    Unittest/Django format: "test_name (module.path.ClassName)"
+    Pytest format: "module/path.py::ClassName::test_name"
+    
+    If the test_name is already in pytest format (contains "::"), return it unchanged.
+    """
+    # Check if already in pytest format
+    if '::' in test_name:
+        return test_name
+    
+    # Try to match unittest format: "test_name (module.path.ClassName)"
+    match = re.match(r'^(\w+)\s+\(([^)]+)\)$', test_name.strip())
+    
+    if match:
+        test_method = match.group(1)
+        full_class_path = match.group(2)
+        
+        # Split the full class path into module path and class name
+        # e.g., "pagination.tests.PaginationTests" -> module: "pagination.tests", class: "PaginationTests"
+        parts = full_class_path.rsplit('.', 1)
+        
+        if len(parts) == 2:
+            module_path, class_name = parts
+            # Convert module path to file path
+            # e.g., "pagination.tests" -> "tests/pagination/tests.py"
+            file_path = module_path.replace('.', '/') + '.py'
+            
+            # Return in pytest format: file_path::ClassName::test_method
+            return f"{file_path}::{class_name}::{test_method}"
+    
+    # If conversion failed, return original
+    return test_name
+
         
 # 🚀 新增 (NEW): 用於應用補丁的輔助函數
 # (Helper function for applying patches)
@@ -127,7 +166,8 @@ def _run_tests_in_workspace(
         log_stderr = result.stderr.decode('utf-8', errors='replace')
         full_log.append(f"--- Venv Creation ---\n{log_stdout}\n{log_stderr}")
         if result.returncode != 0:
-            return 0, f2p_total_count, False, f"Failed to create venv.\n{log_stderr}"
+            # 方案三：Venv 创建失败视为环境错误
+            return 0, f2p_total_count, False, f"ENV_ERROR: Failed to create venv.\n{log_stderr}"
 
         # 2a. 安裝核心測試套件
         print("Installing modern test dependencies (pytest, trustme, pytest-json-report, setuptools)...")
@@ -138,8 +178,9 @@ def _run_tests_in_workspace(
         log_stderr = result.stderr.decode('utf-8', errors='replace')
         full_log.append(f"--- Dependency Installation (Step 1/3) ---\n{log_stdout}\n{log_stderr}")
         if result.returncode != 0:
-            full_log.append("FATAL: Step 1/3 failed, aborting test run.")
-            return 0, f2p_total_count, False, "\n".join(full_log)
+            full_log.append("FATAL: Step 1/3 (pytest installation) failed, aborting test run.")
+            # 方案三：标记为环境错误
+            return 0, f2p_total_count, False, "ENV_ERROR: " + "\n".join(full_log)
             
         # 🚀 更改 (CHANGE): 步驟 2b - 使用 os.walk 遞歸查找依賴檔案
         print("Searching for project-specific test requirements...")
@@ -172,6 +213,10 @@ def _run_tests_in_workspace(
                     if result_dev.returncode != 0:
                         print(f"WARNING: Failed to install some dependencies from {rel_req_path}. {log_stderr_dev}")
                         full_log.append(f"WARNING: Installation of {rel_req_path} failed. This may or may not be critical.")
+                        # 方案三：检查是否是严重错误
+                        if "error" in log_stderr_dev.lower() and "could not find" in log_stderr_dev.lower():
+                            print(f"CRITICAL: Dependency installation failed critically.")
+                            return 0, f2p_total_count, False, "ENV_ERROR: " + "\n".join(full_log)
                     
                     break # 找到一個就跳出內部循環 (files loop)
         
@@ -204,7 +249,9 @@ def _run_tests_in_workspace(
         # 4. 運行測試 1：F2P 測試 (帶 JSON 報告)
         print(f"Running pytest (Test 1: {f2p_total_count} Feature Tests)...")
         f2p_report_file = os.path.join(workspace_path, 'f2p_report.json')
-        pytest_cmd_feature = [python_executable, '-m', 'pytest', '--json-report', f'--json-report-file={f2p_report_file}'] + f2p_test_names
+        # Convert test names to pytest format
+        f2p_test_names_converted = [_convert_test_name_to_pytest_format(name) for name in f2p_test_names]
+        pytest_cmd_feature = [python_executable, '-m', 'pytest', '--json-report', f'--json-report-file={f2p_report_file}'] + f2p_test_names_converted
         
         result_feature = subprocess.run(pytest_cmd_feature, cwd=workspace_path, capture_output=True, check=False, timeout=300)
         log_stdout = result_feature.stdout.decode('utf-8', errors='replace')
@@ -224,7 +271,9 @@ def _run_tests_in_workspace(
         p2p_total_count = len(p2p_test_names)
         if p2p_total_count > 0:
             print(f"Running pytest (Test 2: {p2p_total_count} Regression Tests)...")
-            pytest_cmd_regression = [python_executable, '-m', 'pytest'] + p2p_test_names
+            # Convert test names to pytest format
+            p2p_test_names_converted = [_convert_test_name_to_pytest_format(name) for name in p2p_test_names]
+            pytest_cmd_regression = [python_executable, '-m', 'pytest'] + p2p_test_names_converted
             result_regression = subprocess.run(pytest_cmd_regression, cwd=workspace_path, capture_output=True, check=False, timeout=300)
             log_stdout = result_regression.stdout.decode('utf-8', errors='replace')
             log_stderr = result_regression.stderr.decode('utf-8', errors='replace')
@@ -246,10 +295,143 @@ def _run_tests_in_workspace(
         return f2p_passed_count, f2p_total_count, regression_tests_passed, "\n".join(full_log)
 
 
+def _generate_repo_skeleton(workspace_path: str, max_files: int = 100) -> str:
+    """
+    方案一：生成项目骨架 (Repo Skeleton)
+    包含：文件路径、类名、函数名、docstring，但不包含具体实现
+    """
+    skeleton_parts = []
+    file_count = 0
+    
+    # 获取所有Python文件
+    for root, dirs, files in os.walk(workspace_path):
+        # 排除常见的非核心目录
+        dirs[:] = [d for d in dirs if d not in ['.git', 'venv', '__pycache__', '.tox', 'node_modules', '.pytest_cache']]
+        
+        if file_count >= max_files:
+            break
+            
+        for file in files:
+            if file.endswith('.py'):
+                file_path = os.path.join(root, file)
+                rel_path = os.path.relpath(file_path, workspace_path)
+                
+                # 跳过测试文件
+                if 'test' in rel_path.lower():
+                    continue
+                
+                try:
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                        content = f.read()
+                    
+                    # 提取类和函数定义（简化版骨架）
+                    import_lines = [line for line in content.split('\n') if line.startswith('import ') or line.startswith('from ')]
+                    class_lines = [line for line in content.split('\n') if line.strip().startswith('class ')]
+                    func_lines = [line for line in content.split('\n') if line.strip().startswith('def ') and not line.strip().startswith('def _')]
+                    
+                    if import_lines or class_lines or func_lines:
+                        skeleton_parts.append(f"\n--- FILE: {rel_path} ---")
+                        if import_lines:
+                            skeleton_parts.append("# Imports:\n" + "\n".join(import_lines[:5]))  # 只取前5个
+                        if class_lines:
+                            skeleton_parts.append("# Classes:\n" + "\n".join(class_lines[:10]))
+                        if func_lines:
+                            skeleton_parts.append("# Functions:\n" + "\n".join(func_lines[:10]))
+                        
+                        file_count += 1
+                        
+                except Exception as e:
+                    continue
+    
+    return "\n".join(skeleton_parts)
+
+def _keyword_search(workspace_path: str, doc_change: str) -> list[str]:
+    """
+    修复版：基于关键词在代码库中搜索相关文件
+    """
+    import re
+    
+    # 1. 提取关键词 (保持不变)
+    potential_identifiers = re.findall(r'\b[A-Z][a-zA-Z0-9]+\b|\b[a-z_][a-z0-9_]+\b', doc_change)
+    common_words = {'the', 'and', 'for', 'with', 'this', 'that', 'from', 'will', 'should', 'must', 'can', 'may', 'example', 'test', 'file', 'code', 'change', 'fix', 'bug', 'issue'}
+    keywords = {word for word in potential_identifiers if len(word) > 3 and word.lower() not in common_words}
+    keywords = list(keywords)[:10]
+    
+    if not keywords:
+        return []
+    
+    print(f"[Keyword Search] Searching for: {keywords}")
+    
+    matched_files = set()
+    for keyword in keywords:
+        try:
+            # 2. 执行搜索 (保持不变)
+            if platform.system() == "Windows":
+                result = subprocess.run(
+                    ['findstr', '/S', '/M', '/I', keyword, '*.py'],
+                    cwd=workspace_path,
+                    capture_output=True,
+                    text=True,
+                    timeout=20 # 增加超时时间
+                )
+            else:
+                result = subprocess.run(
+                    ['grep', '-r', '-l', '-i', keyword, '--include=*.py', '.'],
+                    cwd=workspace_path,
+                    capture_output=True,
+                    text=True,
+                    timeout=20
+                )
+            
+            if result.returncode == 0:
+                for line in result.stdout.split('\n'):
+                    raw_line = line.strip()
+                    if raw_line and 'test' not in raw_line.lower():
+                        # --- 关键修复开始 ---
+                        # 1. 确保我们有一个相对于 workspace 的干净路径
+                        # findstr/grep 输出通常已经是相对于 cwd 的，但为了保险：
+                        
+                        # 如果路径已经是绝对路径（极少见但可能），直接使用
+                        if os.path.isabs(raw_line):
+                            full_path = raw_line
+                        else:
+                            # 拼接成绝对路径
+                            full_path = os.path.join(workspace_path, raw_line)
+                        
+                        # 2. 规范化路径（处理 .. 和冗余分隔符）
+                        full_path = os.path.normpath(full_path)
+                        
+                        # 3. 再次检查该文件是否真的在 workspace 内部
+                        # (防止符号链接跳出，或者之前的路径计算错误)
+                        if not full_path.startswith(os.path.abspath(workspace_path)):
+                            continue
+
+                        # 4. 安全地计算相对路径
+                        rel_path = os.path.relpath(full_path, workspace_path)
+                        
+                        # 5. 统一分隔符为 '/'
+                        clean_path = rel_path.replace('\\', '/')
+                        
+                        # 6. 再次过滤掉以 .. 开头的路径 (双重保险)
+                        if not clean_path.startswith('..'):
+                            matched_files.add(clean_path)
+                        # --- 关键修复结束 ---
+
+        except Exception as e:
+            print(f"[Keyword Search] Error searching for {keyword}: {e}")
+            continue
+    
+    result = list(matched_files)[:5]
+    print(f"[Keyword Search] Found {len(result)} files: {result}")
+    return result
+
 def _get_relevant_files_from_llm(model, doc_change: str, workspace_path: str) -> list[str]:
     """
-    (此函數保持不變)
+    方案一改进：结合骨架搜索和关键词搜索
     """
+    # 方案一：先进行关键词搜索
+    keyword_files = _keyword_search(workspace_path, doc_change)
+    
     all_files = []
     # (os.walk 迴圈保持不變)
     for root, _, files in os.walk(workspace_path):
@@ -260,17 +442,63 @@ def _get_relevant_files_from_llm(model, doc_change: str, workspace_path: str) ->
                 all_files.append(rel_path.replace('\\', '/'))
     if not all_files:
         print(f"[Task] WARNING: os.walk found NO files in {workspace_path}")
-        return []
+        return keyword_files  # 至少返回关键词搜索的结果
+    
+    # 方案一：生成骨架
+    print("[Task] Generating repository skeleton...")
+    skeleton = _generate_repo_skeleton(workspace_path)
+    skeleton_size = len(skeleton)
+    print(f"[Task] Skeleton size: {skeleton_size} characters")
+    
     file_list_str = ', '.join(all_files).replace('\\', '/')
     if not file_list_str:
         print(f"[Task] WARNING: No code files found to analyze.")
-        return []
+        return keyword_files
 
-    # 🚀 這是新的、更智慧的提示詞
-    prompt = (
+    # 🚀 這是新的、更智慧的提示詞（包含骨架和关键词搜索结果）
+    # 在构建 prompt_text 变量时，确保包含以下说明：
+    
+    system_instruction = """
+    You are an expert software engineer.
+    
+    IMPORTANT: When you modify files, DO NOT output the entire file. 
+    Output ONLY the specific code blocks that need to be changed using a SEARCH/REPLACE format.
+    
+    FORMAT:
+    File: path/to/file.py
+    <<<<
+    [Original code snippet to be replaced (must match exactly)]
+    ====
+    [New code snippet]
+    >>>>
+    
+    EXAMPLE:
+    File: django/utils/text.py
+    <<<<
+    def slugify(value, allow_unicode=False):
+        value = str(value)
+    ====
+    def slugify(value, allow_unicode=False):
+        value = str(value)
+        if allow_unicode:
+            value = unicodedata.normalize('NFKC', value)
+    >>>>
+    
+    RULES:
+    1. Use multiple <<<< ==== >>>> blocks for multiple changes in one file.
+    2. The content inside <<<< must match the original file EXACTLY (byte-for-byte), or the patch will fail.
+    3. Include 2-3 lines of context around the change in the <<<< block to ensure uniqueness.
+    """
+    
+
+    prompt_text = (
         f"You are an expert file locator agent. Your goal is to identify ALL files required for a code change, including dependency files.\n\n"
         f"**DOCUMENTATION CHANGE:**\n{doc_change}\n\n"
+        f"**PROJECT STRUCTURE (Skeleton):**\n"
+        f"{skeleton[:20000]}\n\n"  # 限制骨架大小
         f"**CODE FILE LIST:**\n{file_list_str}\n\n"
+        f"**FILES FOUND BY KEYWORD SEARCH (High Priority):**\n"
+        f"{', '.join(keyword_files) if keyword_files else 'None'}\n\n"
         f"**THINKING PROCESS (CRITICAL):**\n"
         "1.  **Core Logic:** Which file contains the primary code to be modified based on the documentation? (e.g., 'requests/models.py')\n"
         "2.  **New Symbols:** Does this change introduce new classes, functions, or exceptions? (e.g., 'JSONDecodeError')\n"
@@ -285,15 +513,18 @@ def _get_relevant_files_from_llm(model, doc_change: str, workspace_path: str) ->
         "   {\n"
         "     \"files\": [\"path/to/file1.py\", \"path/to/file2.py\", \"path/to/compat.py\", \"path/to/__init__.py\"]\n"
         "   }\n"
-        "3.  **DO NOT** include any files from `test/` or `tests/` directories."
+        "3.  **DO NOT** include any files from `test/` or `tests/` directories.\n"
+        "   DO NOT include actions or code content in this step."
     )
+    prompt = system_instruction + "\n\n" + prompt_text
     response_text = None
     try:
         response = model.generate_content(
             prompt,
             generation_config=GenerationConfig(
                 response_mime_type="application/json"
-            )
+            ),
+            request_options=RequestOptions(timeout=300)  # 5 minutes timeout for file finding - FIXED
         )
         # (函數的其餘部分保持不變)
         response_text = response.text
@@ -309,6 +540,17 @@ def _get_relevant_files_from_llm(model, doc_change: str, workspace_path: str) ->
             return []
         llm_files = data["files"]
         valid_files = [f.strip().replace('\\', '/') for f in llm_files if f.strip() in all_files]
+        
+        # 方案一：强制包含关键词搜索找到的文件
+        # for kw_file in keyword_files:
+        #     if kw_file not in valid_files:
+        #         valid_files.append(kw_file)
+        #         print(f"[Task] Force-including keyword-matched file: {kw_file}")
+        for kw_file in keyword_files:
+            if kw_file not in valid_files:
+                valid_files.append(kw_file)
+                print(f"[Task] Force-including keyword-matched file: {kw_file}")
+                
         if not valid_files and llm_files:
              print(f"[Task] WARNING: AI found files {llm_files}, but none were in the master 'all_files' list.")
         return valid_files
@@ -321,49 +563,95 @@ def _get_relevant_files_from_llm(model, doc_change: str, workspace_path: str) ->
 
 def _get_file_contexts(workspace_path: str, relevant_files: list[str]) -> str:
     """
-    (此函數保持不變)
-    (This function is unchanged)
+    读取相关文件内容并构建上下文字符串
+    (Reads relevant file contents and builds context string)
+    
+    优化：限制单个文件大小，避免prompt过大
     """
     context_prompt_parts = []
-    # ... (此函數的其餘部分保持不變) ...
+    MAX_FILE_SIZE = 50000  # 50KB per file limit to avoid huge prompts
+    MAX_TOTAL_SIZE = 200000  # 200KB total context limit
+    total_size = 0
+    
     for file_path in relevant_files:
         full_path = os.path.join(workspace_path, file_path)
         if not os.path.exists(full_path):
             print(f"WARNING: File `{file_path}` identified by AI does not exist. Skipping.")
             continue
         try:
-            with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
-                file_content = f.read()
-            context_prompt_parts.append(
+            # Check file size before reading
+            file_size = os.path.getsize(full_path)
+            
+            if file_size > MAX_FILE_SIZE:
+                print(f"WARNING: File `{file_path}` is too large ({file_size} bytes). Truncating to first {MAX_FILE_SIZE} bytes.")
+                with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    file_content = f.read(MAX_FILE_SIZE)
+                file_content += "\n\n... [FILE TRUNCATED DUE TO SIZE] ..."
+            else:
+                with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    file_content = f.read()
+            
+            # Check total context size
+            content_block = (
                 f"--- START OF FILE: {file_path} ---\n"
                 f"{file_content}\n"
                 f"--- END OF FILE: {file_path} ---\n"
             )
+            
+            if total_size + len(content_block) > MAX_TOTAL_SIZE:
+                print(f"WARNING: Total context size would exceed {MAX_TOTAL_SIZE} bytes. Skipping remaining files.")
+                context_prompt_parts.append(
+                    f"\n... [REMAINING FILES SKIPPED DUE TO CONTEXT SIZE LIMIT] ...\n"
+                )
+                break
+            
+            context_prompt_parts.append(content_block)
+            total_size += len(content_block)
+            
         except Exception as e:
             print(f"Error reading file {file_path}: {e}")
-    return "\n".join(context_prompt_parts)
+    
+    result = "\n".join(context_prompt_parts)
+    print(f"[Context] Total context size: {len(result)} characters ({len(relevant_files)} files)")
+    return result
 
 def _parse_v7_response(raw_response_text: str) -> dict[str, str]:
     """
     (此函數保持不變)
     (This function is unchanged)
     """
-    modified_files = {}
-    # ... (此函數的其餘部分保持不變) ...
-    file_chunks = re.split(r'--- START OF FILE: (.*?) ---\n', raw_response_text)
-    if len(file_chunks) < 2:
-        raise ValueError("AI response did not contain any '--- START OF FILE: ' delimiters.")
-    for i in range(1, len(file_chunks), 2):
-        file_path = file_chunks[i].strip()
-        content_part = file_chunks[i+1]
-        content = re.sub(r'--- END OF FILE: .*? ---', '', content_part, flags=re.DOTALL).strip()
-        if file_path and content:
-            modified_files[file_path] = content
-        else:
-            print(f"WARNING: Could not parse file chunk: Filepath='{file_path}', Content preview='{content[:50]}...'")
-    if not modified_files:
-        raise ValueError("AI response was parsed, but no valid file content blocks were found.")
-    return modified_files
+    pattern = re.compile(
+        r"File:\s*(.*?)\n\s*<<<<\n(.*?)\n====\n(.*?)\n>>>>", 
+        re.DOTALL
+    )
+
+    matches = pattern.findall(raw_response_text)
+    
+    if not matches:
+        # 如果沒有匹配到块格式，嘗試回退到舊的 "全文件重寫" 格式检查
+        if "--- START OF FILE:" in raw_response_text:
+            print("WARNING: Falling back to legacy FULL FILE parsing.")
+            file_chunks = re.split(r'--- START OF FILE: (.*?) ---\n', raw_response_text)
+            for i in range(1, len(file_chunks), 2):
+                file_path = file_chunks[i].strip()
+                content_part = file_chunks[i+1]
+                content = re.sub(r'--- END OF FILE: .*? ---', '', content_part, flags=re.DOTALL).strip()
+                modified_files[file_path] = content
+            return modified_files
+        
+        print("WARNING: No valid code blocks found in AI response.")
+        return {}
+    file_changes = {}
+    for file_path, search_block, replace_block in matches:
+        file_path = file_path.strip()
+        if file_path not in file_changes:
+            file_changes[file_path] = []
+        file_changes[file_path].append((search_block, replace_block))
+
+    for file_path, changes in file_changes.items():
+        pass
+    pass
+    raise NotImplementedError("由于架构限制，请使用下面的 '方案 B' 修改 run_agent_attempt")
 
 
 # --- 指標計算 (Metrics Calculation) ---
@@ -449,6 +737,80 @@ def calculate_all_metrics(
 
 # --- 核心 Agent 工作函數 (Core Agent Worker Function) ---
 
+def run_agent_attempt_with_reflexion(
+    workspace_path: str,
+    model,
+    initial_prompt: str,
+    feature_test_patch: str,
+    f2p_test_names: list[str],
+    p2p_test_names: list[str],
+    max_reflexion_iterations: int = 3  # 方案二：最大自校正次数
+) -> dict:
+    """
+    方案二：实现 Reflexion (Self-Correction Loop)
+    运行 Agent 并根据测试失败进行自我调试和重试
+    """
+    print(f"[Reflexion] Starting with max {max_reflexion_iterations} iterations...")
+    
+    for iteration in range(max_reflexion_iterations):
+        print(f"\n[Reflexion] === Iteration {iteration + 1}/{max_reflexion_iterations} ===")
+        
+        # 构建当前迭代的 prompt
+        if iteration == 0:
+            current_prompt = initial_prompt
+        else:
+            # 在后续迭代中，添加上一次的错误信息
+            current_prompt = (
+                f"{initial_prompt}\n\n"
+                f"**PREVIOUS ATTEMPT FAILED**\n"
+                f"Your previous code changes did not pass the tests. Here is the test output:\n\n"
+                f"```\n{last_test_output}\n```\n\n"
+                f"**INSTRUCTIONS FOR RETRY:**\n"
+                f"1. Carefully analyze the test failure messages above\n"
+                f"2. Identify what went wrong in your previous implementation\n"
+                f"3. Generate corrected code that fixes these specific errors\n"
+                f"4. Make sure to address ALL failing tests\n"
+                f"5. Do NOT repeat the same mistakes\n"
+            )
+        
+        # 运行一次尝试
+        result = run_agent_attempt(
+            workspace_path=workspace_path,
+            model=model,
+            prompt_text=current_prompt,
+            feature_test_patch=feature_test_patch,
+            f2p_test_names=f2p_test_names,
+            p2p_test_names=p2p_test_names
+        )
+        
+        # 检查结果
+        status = result.get('status', '')
+        
+        # 方案三：环境错误不重试
+        if status == 'ENV_ERROR':
+            print(f"[Reflexion] Environment error detected. Cannot retry.")
+            return result
+        
+        # 如果通过测试，返回成功
+        if status == 'PASSED':
+            print(f"[Reflexion] SUCCESS after {iteration + 1} iteration(s)!")
+            result['reflexion_iterations'] = iteration + 1
+            return result
+        
+        # 如果是最后一次迭代，返回失败
+        if iteration == max_reflexion_iterations - 1:
+            print(f"[Reflexion] FAILED after {max_reflexion_iterations} iterations.")
+            result['reflexion_iterations'] = max_reflexion_iterations
+            return result
+        
+        # 准备下一次迭代
+        last_test_output = result.get('test_output', 'No test output available')
+        print(f"[Reflexion] Test failed. Preparing retry with error feedback...")
+    
+    # 不应该到达这里
+    return result
+
+
 def run_agent_attempt(
     workspace_path: str, 
     model, 
@@ -460,6 +822,7 @@ def run_agent_attempt(
     """
     運行一次 Agent 嘗試：重置、編碼、寫入、差異比較、測試。
     (Runs one agent attempt: reset, code, write, diff, test.)
+    注意：这个函数现在由 run_agent_attempt_with_reflexion 调用
     """
     
     raw_response_text = ""
@@ -470,9 +833,58 @@ def run_agent_attempt(
         # 重置工作區 (Reset workspace)
         subprocess.run(['git', 'reset', '--hard', 'HEAD'], cwd=workspace_path, capture_output=True, text=True, check=True)
         
-        # 1. 生成程式碼 (Generate Code)
-        response = model.generate_content(prompt_text)
-        raw_response_text = response.text
+        # 1. 生成程式碼 (Generate Code) with timeout and retry
+        max_retries = 1  # Increased from 2 to 3
+        retry_count = 0
+        response = None
+        last_error = None
+        
+        while retry_count < max_retries:
+            try:
+                prompt_size = len(prompt_text)
+                print(f"[Task] Calling Gemini API (attempt {retry_count + 1}/{max_retries})...")
+                print(f"[Task] Prompt size: {prompt_size} characters (~{prompt_size/4:.0f} tokens)")
+                response = model.generate_content(
+                    prompt_text,
+                    request_options=RequestOptions(timeout=300)  # 15 minutes timeout - FIXED: using RequestOptions object
+                )
+                raw_response_text = response.text
+                break  # Success, exit retry loop
+            except Exception as api_error:
+                last_error = api_error
+                retry_count += 1
+                error_str = str(api_error)
+                
+                if "504" in error_str or "Deadline Exceeded" in error_str:
+                    if retry_count < max_retries:
+                        wait_time = 5 * retry_count  # Reduced wait time (5s instead of 10s)
+                        print(f"[Task] API timeout (504). Retrying in {wait_time}s... (attempt {retry_count}/{max_retries})")
+                        time.sleep(wait_time)
+                    else:
+                        print(f"[Task] API timeout after {max_retries} attempts. Giving up.")
+                        return {
+                            'status': 'APPLY_FAILED', 
+                            'error': f"Gemini API timeout after {max_retries} attempts: {error_str}",
+                            'patch': '', 'raw_response': '',
+                            'f2p_passed_count': 0, 'f2p_total_count': 0, 'regression_tests_passed': False
+                        }
+                else:
+                    # Non-timeout error, don't retry
+                    print(f"[Task] API error (non-timeout): {error_str}")
+                    return {
+                        'status': 'APPLY_FAILED', 
+                        'error': f"Gemini API error: {error_str}",
+                        'patch': '', 'raw_response': '',
+                        'f2p_passed_count': 0, 'f2p_total_count': 0, 'regression_tests_passed': False
+                    }
+        
+        if response is None:
+            return {
+                'status': 'APPLY_FAILED', 
+                'error': f"Failed to get API response after {max_retries} attempts",
+                'patch': '', 'raw_response': '',
+                'f2p_passed_count': 0, 'f2p_total_count': 0, 'regression_tests_passed': False
+            }
         
         # 2. 解析回應 (Parse Response)
         try:
@@ -524,6 +936,19 @@ def run_agent_attempt(
             f2p_test_names,
             p2p_test_names
         )
+        
+        # 方案三：检查是否是环境错误
+        if test_output.startswith("ENV_ERROR:"):
+            return {
+                'status': 'ENV_ERROR',
+                'error': test_output,
+                'patch': final_patch_str,
+                'test_output': test_output,
+                'raw_response': raw_response_text,
+                'f2p_passed_count': 0,
+                'f2p_total_count': f2p_total_count,
+                'regression_tests_passed': False,
+            }
         
         if f2p_total_count > 0 and f2p_passed_count == f2p_total_count:
             return {
@@ -601,8 +1026,11 @@ def run_agent_demo_attempt(
         # 重置工作區
         subprocess.run(['git', 'reset', '--hard', 'HEAD'], cwd=workspace_path, capture_output=True, text=True, check=True)
         
-        # 1. 生成程式碼
-        response = model.generate_content(prompt_text)
+        # 1. 生成程式碼 with timeout
+        response = model.generate_content(
+            prompt_text,
+            request_options=RequestOptions(timeout=300)  # 5 minutes timeout - FIXED
+        )
         raw_response_text = response.text
         
         # 2. 解析回應
@@ -640,3 +1068,4 @@ def run_agent_demo_attempt(
     except Exception as e:
         print(f"FATAL ERROR in run_agent_demo_attempt: {e}")
         return {'status': 'APPLY_FAILED', 'patch': '', 'raw_response': raw_response_text}
+

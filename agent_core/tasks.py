@@ -8,7 +8,8 @@ import os
 from .models import EvaluationTask, EvaluationResult, EvaluationAttempt
 from .services import (
     setup_workspace, 
-    run_agent_attempt, 
+    run_agent_attempt,
+    run_agent_attempt_with_reflexion,  # 方案二：导入新的 Reflexion 函数
     _get_relevant_files_from_llm, 
     _get_file_contexts,
     calculate_all_metrics,
@@ -75,8 +76,8 @@ def process_evaluation_task(self, task_id):
     """
     (此函數與 V16 版本幾乎相同)
     """
-    
-    MAX_ATTEMPTS = 1
+    # TODO: 调高此处 提升成功率
+    MAX_ATTEMPTS = 1 
     task = None
     workspace_path = None
     final_status = 'FAILED'
@@ -129,57 +130,59 @@ def process_evaluation_task(self, task_id):
         tests_passed = False
 
         # 2. 調試循環
-        for i in range(MAX_ATTEMPTS):
-            attempt_num = i + 1
-            logger.info(f"[Task {task.id}] Starting attempt {attempt_num}/{MAX_ATTEMPTS}...")
-            
-            prompt_text = _build_prompt_for_attempt(task.doc_change_input, context_content_str, history)
-            
-            # 🚀 更改: 傳入所有測試數據
-            attempt_result = run_agent_attempt(
-                workspace_path=workspace_path,
-                model=model,
-                prompt_text=prompt_text,
-                feature_test_patch=task.feature_test_patch, # 🚀 新增
-                f2p_test_names=task.f2p_test_names,         # 🚀 新增
-                p2p_test_names=task.p2p_test_names          # 🚀 新增
-            )
-            
-            attempt = EvaluationAttempt.objects.create(
-                task=task,
-                attempt_number=attempt_num,
-                status=attempt_result['status'],
-                prompt_text=prompt_text,
-                raw_response=attempt_result['raw_response'],
-                generated_patch=attempt_result['patch'],
-                test_output=attempt_result.get('test_output', '')
-            )
-            
-            final_patch = attempt_result['patch']
-            applied_successfully = (attempt_result['status'] != 'APPLY_FAILED')
-            
-            tests_passed = (attempt_result['status'] == 'PASSED')
-            regression_tests_passed = attempt_result.get('regression_tests_passed', False)
-            f2p_passed_count = attempt_result.get('f2p_passed_count', 0)
-            f2p_total_count = attempt_result.get('f2p_total_count', 0)
+        # 方案二：使用 Reflexion Loop 替代手动循环
+        # Reflexion 会在内部处理重试逻辑
+        prompt_text = _build_prompt_for_attempt(task.doc_change_input, context_content_str, [])
+        
+        # 🚀 方案二: 使用带 Reflexion 的新函数
+        attempt_result = run_agent_attempt_with_reflexion(
+            workspace_path=workspace_path,
+            model=model,
+            initial_prompt=prompt_text,
+            feature_test_patch=task.feature_test_patch,
+            f2p_test_names=task.f2p_test_names,
+            p2p_test_names=task.p2p_test_names,
+            max_reflexion_iterations=MAX_ATTEMPTS  # 使用 MAX_ATTEMPTS 作为最大迭代次数
+        )
+        
+        # 记录结果（Reflexion 已经完成了所有尝试）
+        reflexion_iters = attempt_result.get('reflexion_iterations', 1)
+        logger.info(f"[Task {task.id}] Reflexion completed after {reflexion_iters} iteration(s)")
+        
+        # 创建一个 EvaluationAttempt 记录（代表整个 Reflexion 过程）
+        attempt = EvaluationAttempt.objects.create(
+            task=task,
+            attempt_number=1,  # 整个 Reflexion 算作一次尝试
+            status=attempt_result['status'],
+            prompt_text=prompt_text,
+            raw_response=attempt_result['raw_response'],
+            generated_patch=attempt_result['patch'],
+            test_output=attempt_result.get('test_output', f"Reflexion completed in {reflexion_iters} iterations")
+        )
+        
+        final_patch = attempt_result['patch']
+        applied_successfully = (attempt_result['status'] not in ['APPLY_FAILED', 'ENV_ERROR'])
+        
+        tests_passed = (attempt_result['status'] == 'PASSED')
+        regression_tests_passed = attempt_result.get('regression_tests_passed', False)
+        f2p_passed_count = attempt_result.get('f2p_passed_count', 0)
+        f2p_total_count = attempt_result.get('f2p_total_count', 0)
 
-            if tests_passed:
-                logger.info(f"[Task {task.id}] Attempt {attempt_num} PASSED tests.")
-                final_status = 'COMPLETED'
-                break 
-            
-            elif attempt_result['status'] == 'APPLY_FAILED':
-                logger.error(f"[Task {task.id}] Attempt {attempt_num} FAILED TO APPLY. Stopping loop.")
-                final_status = 'FAILED_APPLY'
-                task.error_details = attempt_result.get('error', 'AI response parsing failed.')
-                break
-
-            elif attempt_result['status'] == 'TEST_FAILED':
-                logger.warning(f"[Task {task.id}] Attempt {attempt_num} FAILED tests. Looping...")
-                final_status = 'FAILED_TEST'
-                history.append(f"--- ATTEMPT {attempt_num} (FAILED) ---")
-                history.append(f"GENERATED PATCH:\n{attempt_result['patch']}")
-                history.append(f"PYTEST ERRORS:\n{attempt_result['test_output']}")
+        # 根据结果设置最终状态
+        if tests_passed:
+            logger.info(f"[Task {task.id}] PASSED tests after {reflexion_iters} Reflexion iteration(s).")
+            final_status = 'COMPLETED'
+        elif attempt_result['status'] == 'ENV_ERROR':
+            logger.error(f"[Task {task.id}] Environment error detected. Cannot continue.")
+            final_status = 'FAILED_APPLY'
+            task.error_details = attempt_result.get('error', 'Environment setup failed.')
+        elif attempt_result['status'] == 'APPLY_FAILED':
+            logger.error(f"[Task {task.id}] FAILED TO APPLY after {reflexion_iters} iteration(s).")
+            final_status = 'FAILED_APPLY'
+            task.error_details = attempt_result.get('error', 'AI response parsing failed.')
+        else:  # TEST_FAILED
+            logger.warning(f"[Task {task.id}] FAILED tests after {reflexion_iters} Reflexion iteration(s).")
+            final_status = 'FAILED_TEST'
 
         # 3. 循環後處理
         logger.info(f"[Task {task.id}] Loop finished with status: {final_status}")
