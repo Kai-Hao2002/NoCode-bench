@@ -1,3 +1,4 @@
+# agent_core/tasks.py
 import logging
 from celery import shared_task
 from django.utils import timezone
@@ -51,7 +52,10 @@ def _build_prompt_for_attempt(doc_change: str, context_content_str: str, history
     # 階段二：調試嘗試
     history_str = "\n\n".join(history)
     return (
-        f"You are an expert AI software engineer. Your previous attempt to fix the code failed the test suite.\n\n"
+        f"You are an expert AI software engineer. Your previous attempt failed the test suite.\n\n"
+        f"**WARNING: REGRESSION DETECTED**\n"
+        "If the previous error log shows failures in 'existing' or 'regression' tests, it means your changes BROKE working code. \n"
+        "You typically break regression tests by changing function signatures or return types of shared utilities without updating all callers.\n\n"
         f"**ORIGINAL DOCUMENTATION CHANGE:**\n{doc_change}\n\n"
         f"**ORIGINAL FILE CONTENTS (ALL RELEVANT FILES):**\n"
         f"{context_content_str}\n\n"
@@ -73,10 +77,10 @@ def _build_prompt_for_attempt(doc_change: str, context_content_str: str, history
 @shared_task(bind=True)
 def process_evaluation_task(self, task_id):
     """
-    (此函數與 V16 版本幾乎相同)
+    🚀 更改 (CHANGE): 此任務現在會獲取並儲存 P2P 計數器。
     """
     
-    MAX_ATTEMPTS = 1
+    MAX_ATTEMPTS = 2
     task = None
     workspace_path = None
     final_status = 'FAILED'
@@ -126,6 +130,9 @@ def process_evaluation_task(self, task_id):
         regression_tests_passed = False
         f2p_passed_count = 0
         f2p_total_count = 0
+        # 🚀 新增 (NEW): 初始化 P2P 計數器
+        p2p_passed_count = 0
+        p2p_total_count = 0
         tests_passed = False
 
         # 2. 調試循環
@@ -162,6 +169,9 @@ def process_evaluation_task(self, task_id):
             regression_tests_passed = attempt_result.get('regression_tests_passed', False)
             f2p_passed_count = attempt_result.get('f2p_passed_count', 0)
             f2p_total_count = attempt_result.get('f2p_total_count', 0)
+            # 🚀 新增 (NEW): 獲取 P2P 計數器
+            p2p_passed_count = attempt_result.get('p2p_passed_count', 0)
+            p2p_total_count = attempt_result.get('p2p_total_count', 0)
 
             if tests_passed:
                 logger.info(f"[Task {task.id}] Attempt {attempt_num} PASSED tests.")
@@ -188,9 +198,12 @@ def process_evaluation_task(self, task_id):
         ground_truth_patch = task.ground_truth_patch or ""
         run_time = (timezone.now() - task.start_time).total_seconds()
         
+        # 🚀 更改 (CHANGE): 傳入 P2P 計數器
         metrics = calculate_all_metrics(
             f2p_passed_count=f2p_passed_count,
             f2p_total_count=f2p_total_count,
+            p2p_passed_count=p2p_passed_count, # 🚀 新增
+            p2p_total_count=p2p_total_count,   # 🚀 新增
             regression_tests_passed=regression_tests_passed,
             applied_successfully=applied_successfully,
             generated_patch=final_patch,
@@ -198,7 +211,7 @@ def process_evaluation_task(self, task_id):
             run_time_seconds=run_time
         )
         
-        # (此 'create' 調用與 V16 相同)
+        # 🚀 更改 (CHANGE): 儲存 P2P 計數器
         EvaluationResult.objects.create(
             task=task,
             success_percent=metrics.get('success_percent', 0.0),
@@ -210,6 +223,8 @@ def process_evaluation_task(self, task_id):
             run_time_seconds=metrics.get('run_time_seconds', 0.0),
             f2p_passed_count=metrics.get('f2p_passed_count', 0),
             f2p_total_count=metrics.get('f2p_total_count', 0),
+            p2p_passed_count=metrics.get('p2p_passed_count', 0), # 🚀 新增
+            p2p_total_count=metrics.get('p2p_total_count', 0),   # 🚀 新增
             generated_patch=final_patch
         )
         
@@ -238,6 +253,9 @@ def process_evaluation_task(self, task_id):
 
 @shared_task(bind=True)
 def process_custom_demo_task(self, task_id):
+    """
+    (此函數保持不變)
+    """
     task = None
     workspace_path = None
     
@@ -301,7 +319,9 @@ def process_custom_demo_task(self, task_id):
                 applied_percent=100.0, # 如果到這裡，它就是 100%
                 rt_percent=0.0,
                 file_percent=0.0,
-                # (我們可以將其設為 -1 來表示 "N/A (不適用)")
+                # (我們可以在這裡添加 p2p 計數器為 -1，表示 N/A)
+                p2p_passed_count=-1,
+                p2p_total_count=-1,
             )
             task.status = 'COMPLETED'
         else:

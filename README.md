@@ -2,7 +2,7 @@ C:\Users\User\AppData\Local\Programs\Python\Python311\python.exe -m venv .venv
 .venv\Scripts\activate.bat
 pip install django djangorestframework celery redis google-genai python-dotenv psycopg2-binary pytest google-generativeai unidiff gevent gunicorn psycopg2-binary  whitenoise  dj-database-url
 //python manage.py startapp agent_core
-
+git config --global core.autocrlf false
 
 python manage.py makemigrations agent_core
 python manage.py migrate
