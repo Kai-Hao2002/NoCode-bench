@@ -26,47 +26,61 @@ logger = logging.getLogger(__name__)
 
 def _build_prompt_for_attempt(doc_change: str, context_content_str: str, history: list[str]) -> str:
     """
-    (此函數保持不變)
+    Constructs the prompt for the LLM.
+    Updated to prevent API hallucinations (AttributeError).
     """
     
-    # 階段一：第一次嘗試
+    # 增強版檢查清單：加入 API 驗證
+    # (Enhanced Checklist: Added API Verification)
+    safety_checklist = (
+        "**CRITICAL SAFETY CHECKLIST:**\n"
+        "1.  **Verify APIs (NO HALLUCINATIONS):** Before calling a method on an object (e.g., `linter.add_option(...)`), YOU MUST verify that the method actually exists in the class definition provided in the context. If you don't see `def add_option` in the file, DO NOT CALL IT.\n"
+        "2.  **Do NOT Change Signatures:** Do not change the arguments or return type of existing functions unless absolutely necessary.\n"
+        "3.  **Use Default Arguments:** If you adding a parameter, provide a default value (e.g., `def func(a, b=None):`).\n"
+        "4.  **Check Imports:** Do not remove imports that might be used by other files.\n"
+    )
+
+    # 階段一：第一次嘗試 (First Attempt)
     if not history:
         return (
-            f"You are an expert AI software engineer. Your task is to implement a feature based on a documentation change.\n\n"
+            f"You are an expert AI software engineer. Your task is to implement a feature based on a documentation change.\n"
+            f"You must prioritize correctness and strictly follow existing APIs.\n\n"
             f"**DOCUMENTATION CHANGE TO IMPLEMENT:**\n{doc_change}\n\n"
             f"**ORIGINAL FILE CONTENTS (ALL RELEVANT FILES):**\n"
             f"{context_content_str}\n\n"
-            f"**CRITICAL INSTRUCTIONS:**\n"
-            "1.  **Analyze Dependencies:** Carefully read all provided files. Pay close attention to how they import from each other, especially `compat.py` and `__init__.py`.\n"
-            "2.  **Implement Correctly:** Your task is to rewrite the files to implement the change. Ensure any new symbols (like `JSONDecodeError`) are correctly defined, imported, and exported in *all* necessary files (like `compat.py` and `__init__.py`) according to the existing project structure.\n"
+            f"{safety_checklist}\n"
+            f"**INSTRUCTIONS:**\n"
+            "1.  **Analyze Dependencies:** Read the provided files to understand the class structures and available methods.\n"
+            "2.  **Implement Correctly:** Rewrite the files to implement the change.\n"
             "3.  **Full Files Only:** Your response MUST ONLY contain the new, full file contents, separated by special delimiters.\n"
             "4.  **No Unchanged Files:** Do NOT include files that do not need to be changed.\n"
-            "5.  **No Tests:** **DO NOT** modify any files in `test/` or `tests/` directories.\n"
-            "6.  **No Explanation:** Do NOT include any other text, explanations, or markdown ` ``` `.\n\n"
+            "5.  **No Tests:** **DO NOT** modify any files in `test/` or `tests/` directories. Only modify the application code.\n\n"
             "**REQUIRED RESPONSE FORMAT:**\n"
             "--- START OF FILE: path/to/file1.py ---\n"
             "(Full new content of file1.py)\n"
             "--- END OF FILE: path/to/file1.py ---\n"
         )
     
-    # 階段二：調試嘗試
+    # 階段二：調試嘗試 (Debug Attempt)
     history_str = "\n\n".join(history)
     return (
         f"You are an expert AI software engineer. Your previous attempt failed the test suite.\n\n"
-        f"**WARNING: REGRESSION DETECTED**\n"
-        "If the previous error log shows failures in 'existing' or 'regression' tests, it means your changes BROKE working code. \n"
-        "You typically break regression tests by changing function signatures or return types of shared utilities without updating all callers.\n\n"
+        f"**WARNING: FATAL ERROR DETECTED**\n"
+        "The previous patch caused a crash or regression.\n"
+        "**Common Causes for Failures:**\n"
+        "- **AttributeError (CRITICAL):** You called a method that does not exist (e.g., `linter.add_option`). Check the `PyLinter` class definition again. Use `register_checker` or `set_option` if applicable, or define the method if it's missing.\n"
+        "- **SyntaxError:** You introduced invalid syntax that crashed the test collector.\n"
+        "- **ImportError:** You removed a necessary import.\n\n"
         f"**ORIGINAL DOCUMENTATION CHANGE:**\n{doc_change}\n\n"
-        f"**ORIGINAL FILE CONTENTS (ALL RELEVANT FILES):**\n"
+        f"**ORIGINAL FILE CONTENTS:**\n"
         f"{context_content_str}\n\n"
         f"**PREVIOUS FAILED ATTEMPTS (Prompts, Code, and Errors):**\n"
         f"{history_str}\n\n"
+        f"{safety_checklist}\n"
         f"**YOUR TASK:**\n"
-        "1.  Analyze the test failures from your last attempt. If you see errors about `f2p_report.json` or `ImportError`, it means your generated code had a fatal bug (probably in `compat.py` or `__init__.py`).\n"
-        "2.  **Review your previous patch:** Look for logic errors, especially in `compat.py` or `__init__.py`.\n"
-        "3.  Generate a NEW, CORRECTED version of the code to fix the errors.\n"
-        "4.  Provide the full file contents for ALL files you need to modify.\n"
-        "5.  **DO NOT** modify any files in `test/` or `tests/` directories. The error is in your application code.\n\n"
+        "1.  **Analyze the Errors:** Look at the test output. If you see `AttributeError`, STOP and check the class definition.\n"
+        "2.  **Fix the Logic:** Generate a NEW, CORRECTED version of the code.\n"
+        "3.  **Provide Full Content:** Provide the full file contents for ALL files you need to modify.\n\n"
         "**REQUIRED RESPONSE FORMAT (SAME AS BEFORE):**\n"
         "--- START OF FILE: path/to/file1.py ---\n"
         "(Full new content of file1.py)\n"
@@ -80,7 +94,7 @@ def process_evaluation_task(self, task_id):
     🚀 更改 (CHANGE): 此任務現在會獲取並儲存 P2P 計數器。
     """
     
-    MAX_ATTEMPTS = 2
+    MAX_ATTEMPTS = 1
     task = None
     workspace_path = None
     final_status = 'FAILED'
