@@ -9,16 +9,11 @@ from .tasks import process_evaluation_task, process_custom_demo_task
 import time
 
 class EvaluationTaskViewSet(viewsets.ReadOnlyModelViewSet):
-    """提供任務的讀取、狀態查詢和觸發。"""
     queryset = EvaluationTask.objects.all().order_by('-start_time')
     serializer_class = EvaluationTaskSerializer
 
     @action(detail=False, methods=['post'], serializer_class=TaskStartSerializer, url_path='start-task')
     def start_task(self, request):
-        """
-        (此函數保持不變)
-        (This function is unchanged)
-        """
         serializer = TaskStartSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         nocode_id = serializer.validated_data['nocode_bench_id']
@@ -38,7 +33,7 @@ class EvaluationTaskViewSet(viewsets.ReadOnlyModelViewSet):
         task.celery_task_id = celery_result.id
         task.status = 'PENDING'
         if hasattr(task, 'result'):
-             task.result.delete() # 清除舊結果 (Clear old result)
+             task.result.delete() # Clear old result
         task.save()
         return Response(
             EvaluationTaskSerializer(task).data, 
@@ -47,10 +42,6 @@ class EvaluationTaskViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='start-all')
     def start_all_tasks(self, request):
-        """
-        (此函數保持不變)
-        (This function is unchanged)
-        """
         tasks_to_run = EvaluationTask.objects.filter(
             status__in=['PENDING', 'FAILED', 'FAILED_APPLY', 'FAILED_TEST']
         )
@@ -68,9 +59,8 @@ class EvaluationTaskViewSet(viewsets.ReadOnlyModelViewSet):
             status=status.HTTP_202_ACCEPTED
         )
 
-    # 🚀 更改 (CHANGE): 
-    # 此函數現在將正確計算所有 7 個指標的平均值
-    # (This function will now correctly average all 7 metrics)
+
+    # This function will now correctly average all 7 metrics
     @action(detail=False, methods=['get'], url_path='summary')
     def summary(self, request):
         """
@@ -94,10 +84,9 @@ class EvaluationTaskViewSet(viewsets.ReadOnlyModelViewSet):
                 "average_metrics": None
             })
 
-        # 3. 🚀 更改 (CHANGE): 計算聚合
-        # (Calculate aggregations)
+        # 3. Calculate aggregations
         
-        # 論文 (Paper): FV-Micro = SUM(f2p_passed) / SUM(f2p_total) [cite: 459]
+        # Paper: FV-Micro = SUM(f2p_passed) / SUM(f2p_total) 
         total_counts = results_queryset.aggregate(
             total_f2p_passed=Sum('f2p_passed_count'),
             total_f2p_total=Sum('f2p_total_count')
@@ -106,21 +95,19 @@ class EvaluationTaskViewSet(viewsets.ReadOnlyModelViewSet):
         if total_counts['total_f2p_total'] and total_counts['total_f2p_total'] > 0:
             fv_micro = (total_counts['total_f2p_passed'] / total_counts['total_f2p_total']) * 100.0
 
-        # 計算所有其他指標的平均值
         # (Calculate averages for all other metrics)
         averages = results_queryset.aggregate(
             Success_Percent=Avg('success_percent'),
             Applied_Percent=Avg('applied_percent'),
-            RT_Percent=Avg('rt_percent'),           # 
-            FV_Macro=Avg('fv_macro'),             # [cite: 461]
-            File_Percent=Avg('file_percent'),       # [cite: 379]
+            RT_Percent=Avg('rt_percent'),           
+            FV_Macro=Avg('fv_macro'),            
+            File_Percent=Avg('file_percent'),      
             Avg_Runtime_Seconds=Avg('run_time_seconds'),
-            Avg_Tokens=Avg('num_token')           # [cite: 377]
+            Avg_Tokens=Avg('num_token')         
         )
         
-        # 🚀 新增 (NEW): 插入我們手動計算的 FV-Micro
-        # (Insert our manually calculated FV-Micro)
-        averages['FV_Micro'] = fv_micro # [cite: 459]
+        # Insert our manually calculated FV-Micro
+        averages['FV_Micro'] = fv_micro 
 
         progress_percent = (finished_tasks_count / total_tasks) * 100
 
@@ -133,8 +120,8 @@ class EvaluationTaskViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['post'], serializer_class=DemoTaskSerializer, url_path='run-demo')
     def run_demo(self, request):
         """
-        使用來自用戶的*自定義* doc change,
-        基於*現有*的基準實例來運行新的評估。
+        Using a user-defined doc change, the new evaluation 
+        is run based on an existing benchmark instance.
         """
         serializer = DemoTaskSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -143,7 +130,7 @@ class EvaluationTaskViewSet(viewsets.ReadOnlyModelViewSet):
         custom_doc = serializer.validated_data['custom_doc_change']
 
         try:
-            # 1. 查找基礎任務以複製其設置
+            # 1. Find the basic task to copy its settings.
             base_task = EvaluationTask.objects.get(nocode_bench_id=base_id)
         except EvaluationTask.DoesNotExist:
             return Response(
@@ -151,17 +138,17 @@ class EvaluationTaskViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # 2. 建立一個新任務 (或找到一個 demo 專用的任務)
-        # 我們添加一個後綴使其唯一
+        # 2. Create a new task (or find a task specific to the demo)
+        # We add a suffix to make it unique.
         demo_nocode_id = f"demo_{base_id}_{time.time()}"
         
         new_task = EvaluationTask.objects.create(
             nocode_bench_id=demo_nocode_id,
-            doc_change_input=custom_doc, # <-- 使用用戶的自定義提示
+            doc_change_input=custom_doc, # <-- Use user-defined prompts
 
             base_task_id=base_id,
             
-            # 從基礎任務複製所有其他數據
+            # Copy all other data from the basic task.
             ground_truth_patch=base_task.ground_truth_patch,
             feature_test_patch=base_task.feature_test_patch,
             f2p_test_names=base_task.f2p_test_names,
@@ -170,12 +157,12 @@ class EvaluationTaskViewSet(viewsets.ReadOnlyModelViewSet):
             status='PENDING'
         )
 
-        # 3. 啟動 celery 任務
+        # 3. Start Celery task
         celery_result = process_evaluation_task.delay(new_task.id) 
         new_task.celery_task_id = celery_result.id
         new_task.save()
         
-        # 4. 返回新任務的數據
+        # 4. Return data for the new task
         return Response(
             EvaluationTaskSerializer(new_task).data, 
             status=status.HTTP_202_ACCEPTED
@@ -192,16 +179,16 @@ class EvaluationTaskViewSet(viewsets.ReadOnlyModelViewSet):
         github_url = serializer.validated_data['github_url']
         custom_doc = serializer.validated_data['doc_change']
 
-        # 我們「濫用」nocode_bench_id 欄位來儲存 Git URL
-        # 並且使用 'base_task_id' 來標記這是一個自定義任務
+        # We "abuse" the nocode_bench_id field to store the Git URL
+        # and use 'base_task_id' to mark this as a custom task
         demo_nocode_id = f"custom_{github_url}#{time.time()}"
         
         new_task = EvaluationTask.objects.create(
             nocode_bench_id=demo_nocode_id,
             doc_change_input=custom_doc,
-            base_task_id="CUSTOM_REPO_DEMO", # <-- 標記
+            base_task_id="CUSTOM_REPO_DEMO", # <-- tag as custom demo
             
-            # (所有 NoCode-bench 相關欄位都為空)
+            # (All NoCode-bench related fields are empty)
             ground_truth_patch="",
             feature_test_patch="",
             f2p_test_names=[],
@@ -210,12 +197,12 @@ class EvaluationTaskViewSet(viewsets.ReadOnlyModelViewSet):
             status='PENDING'
         )
 
-        # 3. 啟動 *新的* Celery 任務
+        # 3. Start a *new* Celery quest
         celery_result = process_custom_demo_task.delay(new_task.id) 
         new_task.celery_task_id = celery_result.id
         new_task.save()
         
-        # 4. 返回新任務的數據
+        # 4. Return data for the new task
         return Response(
             EvaluationTaskSerializer(new_task).data, 
             status=status.HTTP_202_ACCEPTED

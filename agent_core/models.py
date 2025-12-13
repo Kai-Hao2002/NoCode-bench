@@ -7,11 +7,10 @@ class EvaluationTask(models.Model):
         ('RUNNING', 'Running'),
         ('COMPLETED', 'Completed'),
         ('FAILED', 'Failed'),
-        ('FAILED_APPLY', 'Failed_Apply'), # 應用失敗 (Apply failed)
-        ('FAILED_TEST', 'Failed_Test'),      # 測試失敗 (Test failed)
+        ('FAILED_APPLY', 'Failed_Apply'), 
+        ('FAILED_TEST', 'Failed_Test'),      
     ]
 
-    # NoCode-bench 實例 ID，用於查找程式碼庫
     base_task_id = models.CharField(max_length=255, null=True, blank=True, help_text="The base nocode_bench_id for demo tasks.")
     nocode_bench_id = models.CharField(max_length=255, unique=True, help_text="e.g. example-repo/task-001")
     doc_change_input = models.TextField(help_text="The documentation change instruction.")
@@ -29,24 +28,28 @@ class EvaluationTask(models.Model):
     end_time = models.DateTimeField(null=True, blank=True)
     error_details = models.TextField(null=True, blank=True)
 
+    repo = models.CharField(max_length=255, help_text="e.g. django/django", null=True)
+    version = models.CharField(max_length=50, help_text="e.g. 3.2", null=True)
+    base_commit = models.CharField(max_length=100, help_text="Git SHA", null=True)
+
     def __str__(self):
         return f"Task: {self.nocode_bench_id} - {self.status}"
 
 class EvaluationAttempt(models.Model):
     STATUS_CHOICES = [
-        ('APPLY_FAILED', 'Apply Failed'), # AI 格式錯誤 (AI format error)
-        ('TEST_FAILED', 'Test Failed'),   # 程式碼 logique 錯誤 (Code logic error)
-        ('PASSED', 'Passed'),             # 測試通過 (Tests Passed)
+        ('APPLY_FAILED', 'Apply Failed'), # AI format error
+        ('TEST_FAILED', 'Test Failed'),   # Code logic error
+        ('PASSED', 'Passed'),             # Tests Passed
     ]
     
     task = models.ForeignKey(EvaluationTask, on_delete=models.CASCADE, related_name='attempts')
     attempt_number = models.IntegerField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES)
     
-    prompt_text = models.TextField(help_text="發送給 LLM 的完整提示")
-    raw_response = models.TextField(help_text="來自 LLM 的原始回應")
-    generated_patch = models.TextField(help_text="該次嘗試生成的 git diff")
-    test_output = models.TextField(help_text="Pytest 的輸出日誌")
+    prompt_text = models.TextField(help_text="Full prompt sent to LLM")
+    raw_response = models.TextField(help_text="Original response from LLM")
+    generated_patch = models.TextField(help_text="The git diff generated in this attempt")
+    test_output = models.TextField(help_text="Pytest output logs")
     
     timestamp = models.DateTimeField(auto_now_add=True)
 
@@ -60,32 +63,27 @@ class EvaluationAttempt(models.Model):
 class EvaluationResult(models.Model):
     task = models.OneToOneField(EvaluationTask, on_delete=models.CASCADE, related_name='result')
     
-    # 必需指標 (Required Metrics)
-    success_percent = models.FloatField(default=0.0)  # 🚀 更改：新功能測試 (F2P) 是否 100% 通過
-                                                      # (CHANGE: Are new feature tests (F2P) 100% passed?)
+    # Required Metrics
+    success_percent = models.FloatField(default=0.0)  # (CHANGE: Are new feature tests (F2P) 100% passed?)                                              
     applied_percent = models.FloatField(default=0.0)
-    rt_percent = models.FloatField(default=0.0)       # 🚀 更改：迴歸測試是否 100% 通過
-                                                      # (CHANGE: Are regression tests 100% passed?)
+    rt_percent = models.FloatField(default=0.0)        # (CHANGE: Are regression tests 100% passed?)
+                                                     
     
-    # 論文中的 FV-Macro（每個實例的 F2P 通過率）
     # (The paper's FV-Macro (per-instance F2P pass rate))
     fv_macro = models.FloatField(default=0.0)
     
-    file_percent = models.FloatField(default=0.0)     # 🚀 更改：這現在是精確率 (Precision)
-                                                      # (CHANGE: This is now Precision)
+    file_percent = models.FloatField(default=0.0)    
+                                                      
     num_token = models.IntegerField(default=0)
     
-    # 🚀 新增：論文中的可選指標和 FV 計算
+
     # (NEW: Optional metrics and FV calculation fields)
-    run_time_seconds = models.FloatField(default=0.0) # 運行時間 (Runtime)
-    f2p_passed_count = models.IntegerField(default=0) # (用於 FV-Micro/Macro)
-    f2p_total_count = models.IntegerField(default=0)  # (用於 FV-Micro/Macro)
+    run_time_seconds = models.FloatField(default=0.0) # Runtime
+    f2p_passed_count = models.IntegerField(default=0) # (FV-Micro/Macro)
+    f2p_total_count = models.IntegerField(default=0)  # (FV-Micro/Macro)
 
     p2p_passed_count = models.IntegerField(default=0)
     p2p_total_count = models.IntegerField(default=0)
 
-    # 輸出 (Output)
+    # Output
     generated_patch = models.TextField(help_text="The code patch generated by the LLM.")
-
-    # 🚀 移除 (REMOVED): 舊的 fv_micro，因為它必須在全局計算
-    # (Old fv_micro, as it must be calculated globally)

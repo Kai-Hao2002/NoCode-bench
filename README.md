@@ -68,36 +68,67 @@ corresponding code changes so that project tests pass.
 
 3.  **Install dependencies**
 
-    > **推薦 (Recommended):** 您的 `pip install ...` 命令很長。最佳實踐是將它們放入一個 `requirements.txt` 檔案中。
-    > (Your `pip install ...` command is long. It is a best practice to put these into a `requirements.txt` file.)
-
-    (If you have a `requirements.txt` file:)
     ```bash
     pip install -r requirements.txt
     ```
 
-    (If not, run your original command to install:)
-    ```bash
-    pip install django djangorestframework celery redis google-genai python-dotenv psycopg2-binary pytest google-generativeai
-    ```
-
 4.  **Configure environment variables**
-    此專案使用 `python-dotenv`。請複製 `.env.example`（如果有的話）並將其命名為 `.env`，然後填入必要的設定（例如資料庫憑證、Google API 金鑰）。
-    (This project uses `python-dotenv`. Copy `.env.example` (if it exists) to `.env` and fill in the necessary settings, like database credentials and Google API keys.)
 
-5.  **Start Redis service**
+    This project uses `python-dotenv`. Copy `.env.example` to `.env` and fill in the necessary settings, like database credentials and Google API keys.
+
+5. **Prepare Docker Environments**
+
+    The agent runs code in isolated Docker containers. You must pull the base images and retag them so the local system can recognize them (e.g., mapping `nocodebench/nocode-bench:django` to `fb_django:dev`).
+
+    * *Option A: Windows (PowerShell)*
+        Copy and paste the following script into your PowerShell terminal:
+
+
+        ```powershell
+            $repos = "astropy","django","matplotlib","pylint","pytest","requests","scikit-learn","seaborn","sphinx","xarray"
+            foreach ($r in $repos) {
+                $remote = "nocodebench/nocode-bench:$r"
+                $local = "fb_$($r):dev"
+                Write-Host "🔄 Pulling $remote ..."
+                docker pull $remote
+                Write-Host "🏷️  Tagging as $local ..."
+                docker tag $remote $local
+            }
+            Write-Host "✅ All Docker images prepared!"
+            ```
+
+    *  *Option B: macOS / Linux (Bash)*
+        Run the following in your terminal:
+
+    ```powershell
+            repos=("astropy" "django" "matplotlib" "pylint" "pytest" "requests" "scikit-learn" "seaborn" "sphinx" "xarray")
+            for r in "${repos[@]}"; do
+                remote="nocodebench/nocode-bench:$r"
+                local="fb_$r:dev"
+                echo "🔄 Pulling $remote ..."
+                docker pull $remote
+                echo "🏷️  Tagging as $local ..."
+                docker tag $remote $local
+            done
+            echo "✅ All Docker images prepared!"
+            ```
+
+6.  **Start Redis service**
 
     (We will use Docker to start a Redis instance for the Celery broker.)
     ```bash
     docker run -d -p 6379:6379 --name redis-broker redis
     ```
 
-6.  **Setup the database**
+7.  **Setup the database**
 
     (Run the Django migrations to create the database tables.)
     ```bash
     python manage.py makemigrations agent_core
     python manage.py migrate
+    git clone https://huggingface.co/datasets/NoCode-bench/NoCode-bench_Verified
+    python manage.py setup_codebases
+    python manage.py load_benchmark_data
     ```
 
 ---
@@ -109,9 +140,6 @@ corresponding code changes so that project tests pass.
 ### Terminal 1: Run the Django Server
 
 ```bash
-git clone https://huggingface.co/datasets/NoCode-bench/NoCode-bench_Verified
-python manage.py setup_codebases
-python manage.py load_benchmark_data
 python manage.py runserver
 ```
 ### Terminal 2: Run the Redis service

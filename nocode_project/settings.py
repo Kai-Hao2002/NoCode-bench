@@ -4,7 +4,6 @@ import os
 import dj_database_url
 from dotenv import load_dotenv 
 
-# 🚀 確保 load_dotenv() 在頂部被調用
 # (Ensure load_dotenv() is called at the top)
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(os.path.join(BASE_DIR, '.env'))
@@ -32,7 +31,6 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    # 🚀 Whitenoise 應該在 sessions 之後
     # (Whitenoise should be after sessions)
     'django.contrib.sessions.middleware.SessionMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware', 
@@ -63,10 +61,8 @@ TEMPLATES = [
 WSGI_APPLICATION = 'nocode_project.wsgi.application'
 
 
-# 🚀 更改 (CHANGE): 智能資料庫切換
 # (Smart Database Switching)
 if DEBUG:
-    # (本地開發) 讀取 .env 中的 Postgres 變數
     # (Local Dev) Read Postgres variables from .env
     print("--- RUNNING IN LOCAL DEBUG MODE (USING LOCAL POSTGRES) ---")
     DATABASES = {
@@ -80,7 +76,6 @@ if DEBUG:
         }
     }
 else:
-    # (生產環境) 從 .env 讀取 DATABASE_URL (用於 Docker)
     # (Production) Read DATABASE_URL from .env (for Docker)
     print("--- RUNNING IN PRODUCTION MODE (USING DOCKER DATABASE_URL) ---")
     DATABASES = {
@@ -90,7 +85,6 @@ else:
         )
     }
 
-# ... (AUTH_PASSWORD_VALIDATORS 保持不變) ...
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',},
     {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',},
@@ -112,7 +106,6 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# --- 🚀 更改 (CHANGE): 智能 Celery 切換 ---
 # (Smart Celery Switching)
 if DEBUG:
     # (Local Dev) Make Celery run *synchronously* without Redis
@@ -120,7 +113,6 @@ if DEBUG:
     CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0')
     CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0')
 else:
-    # (生產環境) 連接到 Docker 中的 'redis' 服務
     # (Production) Connect to the 'redis' service in Docker
     print("--- CELERY RUNNING IN ASYNC (PRODUCTION) MODE ---")
     CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL')

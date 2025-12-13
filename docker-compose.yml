@@ -3,7 +3,7 @@ version: '3.8'
 
 services:
   
-  # 1. PostgreSQL 資料庫
+  # 1. PostgreSQL
   db:
     image: postgres:15
     volumes:
@@ -12,19 +12,18 @@ services:
       - ./.env
     restart: always
 
-  # 2. Redis 佇列
+  # 2. Redis 
   redis:
     image: redis:7
     restart: always
 
-  # 3. Django Web 伺服器 (Gunicorn)
+  # 3. Django Web server (Gunicorn)
   app:
     build: .
     command: gunicorn nocode_project.wsgi:application --bind 0.0.0.0:8000
     volumes:
       - static_volume:/app/staticfiles
       - media_volume:/app/media
-      # 🚀 'app' 服務可以訪問 'nocode_dataset'
       # ('app' service has access to 'nocode_dataset')
       - nocode_dataset:/app/NoCode-bench_Verified 
     expose:
@@ -36,14 +35,12 @@ services:
       - db
       - redis
   
-  # 4. Celery Worker (您的 AI Agent)
+  # 4. Celery Worker 
   worker:
     build: .
     command: celery -A nocode_project worker --loglevel=info -P gevent --concurrency=1
     volumes:
       - nocode_workspaces:/app/nocode_workspaces
-      # 🚀 修正 (THE FIX): 
-      # Worker 也必須掛載 'nocode_dataset' 卷
       # (The Worker MUST ALSO mount the 'nocode_dataset' volume)
       - nocode_dataset:/app/NoCode-bench_Verified
     restart: always
@@ -54,7 +51,7 @@ services:
       - db
       - redis
   
-  # 5. Nginx (反向代理)
+  # 5. Nginx 
   nginx:
     image: nginx:latest
     ports:
@@ -67,11 +64,11 @@ services:
       - app
     restart: always
 
-# 頂層卷定義 (Top-level volume definitions)
+# Top-level volume definitions
 volumes:
   postgres_data:
   static_volume:
   media_volume:
   nocode_workspaces:
-  nocode_dataset: # (這個卷已經包含了您的數據)
-                  # (This volume already contains your data)
+  nocode_dataset: # (This volume already contains your data)
+                  

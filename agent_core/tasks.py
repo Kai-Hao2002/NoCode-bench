@@ -161,9 +161,10 @@ def process_evaluation_task(self, task_id):
                 workspace_path=workspace_path,
                 model=model,
                 prompt_text=prompt_text,
-                feature_test_patch=task.feature_test_patch, # 🚀 新增
-                f2p_test_names=task.f2p_test_names,         # 🚀 新增
-                p2p_test_names=task.p2p_test_names          # 🚀 新增
+                feature_test_patch=task.feature_test_patch,
+                f2p_test_names=task.f2p_test_names,
+                p2p_test_names=task.p2p_test_names,
+                task_obj=task  # <--- 新增這個參數！
             )
             
             attempt = EvaluationAttempt.objects.create(

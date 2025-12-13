@@ -29,8 +29,6 @@ class Command(BaseCommand):
                     
                     try:
                         data = json.loads(line)
-                        
-                        # 🚀 更改 (CHANGE): 這些是來自 data.jsonl 的 *真實* 鍵名
                         # (These are the *real* key names from data.jsonl)
                         nocode_bench_id = data.get('instance_id')
                         doc_change = data.get('problem_statement')
@@ -38,22 +36,24 @@ class Command(BaseCommand):
                         feature_test_patch = data.get('test_patch')
                         f2p_test_names = data.get('FAIL2PASS', [])
                         p2p_test_names = data.get('PASS2PASS', [])
-
-
-                        if not all([nocode_bench_id, doc_change, ground_truth_patch, feature_test_patch]):
-                            self.stdout.write(self.style.WARNING(f"Skipping {nocode_bench_id or 'instance'}: missing required fields (id, problem_statement, feature_patch, or test_patch)."))
-                            continue
                         
+                        # Read info needed for Docker
+                        repo = data.get('repo')
+                        version = data.get('version')
+                        base_commit = data.get('base_commit')
+
                         EvaluationTask.objects.create(
                             nocode_bench_id=nocode_bench_id,
                             doc_change_input=doc_change,
                             ground_truth_patch=ground_truth_patch,
-                            feature_test_patch=feature_test_patch, # 🚀 儲存
-                                                                  # (Save)
-                            f2p_test_names=f2p_test_names,       # 🚀 儲存
-                                                                  # (Save)
-                            p2p_test_names=p2p_test_names,       # 🚀 儲存
-                                                                  # (Save)
+                            feature_test_patch=feature_test_patch,
+                            f2p_test_names=f2p_test_names,
+                            p2p_test_names=p2p_test_names,
+                            
+                            repo=repo,
+                            version=version,
+                            base_commit=base_commit,
+                            
                             status='PENDING'
                         )
                         count += 1
