@@ -4,7 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import EvaluationTask, EvaluationResult 
 from django.db.models import Avg, Count, Sum 
-from .serializers import TaskStartSerializer, EvaluationTaskSerializer,DemoTaskSerializer,CustomDemoSerializer
+from .serializers import TaskStartSerializer, EvaluationTaskSerializer,CustomDemoSerializer
 from .tasks import process_evaluation_task, process_custom_demo_task
 import time
 
@@ -117,56 +117,6 @@ class EvaluationTaskViewSet(viewsets.ReadOnlyModelViewSet):
             "progress_percent": round(progress_percent, 2),
             "average_metrics": averages
         })
-    @action(detail=False, methods=['post'], serializer_class=DemoTaskSerializer, url_path='run-demo')
-    def run_demo(self, request):
-        """
-        Using a user-defined doc change, the new evaluation 
-        is run based on an existing benchmark instance.
-        """
-        serializer = DemoTaskSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        base_id = serializer.validated_data['base_nocode_bench_id']
-        custom_doc = serializer.validated_data['custom_doc_change']
-
-        try:
-            # 1. Find the basic task to copy its settings.
-            base_task = EvaluationTask.objects.get(nocode_bench_id=base_id)
-        except EvaluationTask.DoesNotExist:
-            return Response(
-                {"error": f"base task '{base_id}' not found。"},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-        # 2. Create a new task (or find a task specific to the demo)
-        # We add a suffix to make it unique.
-        demo_nocode_id = f"demo_{base_id}_{time.time()}"
-        
-        new_task = EvaluationTask.objects.create(
-            nocode_bench_id=demo_nocode_id,
-            doc_change_input=custom_doc, # <-- Use user-defined prompts
-
-            base_task_id=base_id,
-            
-            # Copy all other data from the basic task.
-            ground_truth_patch=base_task.ground_truth_patch,
-            feature_test_patch=base_task.feature_test_patch,
-            f2p_test_names=base_task.f2p_test_names,
-            p2p_test_names=base_task.p2p_test_names,
-            
-            status='PENDING'
-        )
-
-        # 3. Start Celery task
-        celery_result = process_evaluation_task.delay(new_task.id) 
-        new_task.celery_task_id = celery_result.id
-        new_task.save()
-        
-        # 4. Return data for the new task
-        return Response(
-            EvaluationTaskSerializer(new_task).data, 
-            status=status.HTTP_202_ACCEPTED
-        )
     
     @action(detail=False, methods=['post'], serializer_class=CustomDemoSerializer, url_path='run-custom-repo')
     def run_custom_repo(self, request):
