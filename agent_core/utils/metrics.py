@@ -35,22 +35,31 @@ def calculate_all_metrics(
     ground_truth_patch: str, 
     run_time_seconds: float
 ) -> dict:
-    # RT%
-    if p2p_total_count > 0:
-        rt_percent = (p2p_passed_count / p2p_total_count) * 100.0
-    else:
-        rt_percent = 100.0
-
-    # Success%
+# --- 1. Success%  ---
+    # F2P (Feature Tests):
     f2p_all_passed = (f2p_passed_count == f2p_total_count) if f2p_total_count > 0 else False
-    p2p_all_passed = (p2p_passed_count == p2p_total_count) if p2p_total_count > 0 else False
+    
+    # P2P (Regression Tests):
+    # [CHANGE] If total is 0 (meaning no regression tests for this task, or none selected), treat as True (Pass/Ignore)
+    if p2p_total_count > 0:
+        p2p_all_passed = (p2p_passed_count == p2p_total_count)
+    else:
+        # No regression tests means no regressions, so consider as passed
+        p2p_all_passed = True 
     
     if f2p_all_passed and p2p_all_passed:
         success_percent = 100.0
     else:
         success_percent = 0.0
 
-    # FV-Macro
+    # --- 2. RT%  ---
+    if p2p_total_count > 0:
+        rt_percent = (p2p_passed_count / p2p_total_count) * 100.0
+    else:
+        # No regression tests means RT% is 100%
+        rt_percent = 100.0
+
+    # --- 3. FV-Macro ---
     if f2p_total_count > 0:
         fv_macro = (f2p_passed_count / f2p_total_count) * 100.0
     else:

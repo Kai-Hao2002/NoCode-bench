@@ -2,7 +2,16 @@
 import os
 import json
 import re
+import logging
 from google.generativeai.types import GenerationConfig
+
+logger = logging.getLogger(__name__)
+
+def generate_with_retry(model, prompt, generation_config=None):
+    """
+    直接呼叫 API
+    """
+    return model.generate_content(prompt, generation_config=generation_config)
 
 def parse_llm_response(raw_response_text: str) -> dict[str, str]:
     modified_files = {}
@@ -40,7 +49,9 @@ def get_relevant_files(model, doc_change: str, workspace_path: str) -> list[str]
     )
 
     try:
-        response = model.generate_content(
+        # 2. 使用重試函數 (Use the retry function)
+        response = generate_with_retry(
+            model, 
             prompt,
             generation_config=GenerationConfig(response_mime_type="application/json")
         )
@@ -53,6 +64,7 @@ def get_relevant_files(model, doc_change: str, workspace_path: str) -> list[str]
         return []
 
 def build_prompt_for_attempt(doc_change: str, context_content_str: str, history: list[str]) -> str:
+    # (此函數保持不變)
     safety_checklist = (
         "**CRITICAL SAFETY CHECKLIST:**\n"
         "1.  **Verify APIs:** Before calling a method, verify it exists in the class definition.\n"

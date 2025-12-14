@@ -2,7 +2,11 @@
 import docker
 import time
 import re
+import tarfile
+import io
+import os
 from agent_core.constants import MAP_REPO_TO_CONFIG
+
 
 DOCKER_PATCH_PATH = "/tmp/patch.diff"
 
@@ -13,9 +17,37 @@ except Exception as e:
     client = None
 
 def _write_to_container(container, content: str, path: str):
-    if not content: return
-    escaped = content.replace("'", "'\\''")
-    container.exec_run(f"bash -c 'echo \"{escaped}\" > {path}'")
+    """
+    使用 tar stream 將字串內容以檔案形式寫入容器，避免 shell escaping 和長度限制問題。
+    """
+    if not content: 
+        return
+
+    # 1. 準備 Tar 歸檔 (在記憶體中)
+    tar_stream = io.BytesIO()
+    with tarfile.open(fileobj=tar_stream, mode='w') as tar:
+        encoded_content = content.encode('utf-8')
+        
+        # 建立 TarInfo (檔案資訊)
+        # 注意：put_archive 是解壓到指定目錄，所以這裡只需要檔名
+        tar_info = tarfile.TarInfo(name=os.path.basename(path))
+        tar_info.size = len(encoded_content)
+        tar_info.mtime = time.time()
+        
+        # 將內容寫入 Tar
+        tar.addfile(tar_info, io.BytesIO(encoded_content))
+    
+    # 指標回到開頭，準備讀取
+    tar_stream.seek(0)
+    
+    # 2. 將 Tar 寫入容器
+    # put_archive 會將 tar 解壓到 path 指定的「目錄」下
+    dir_path = os.path.dirname(path)
+    try:
+        container.put_archive(path=dir_path, data=tar_stream)
+    except Exception as e:
+        print(f"ERROR: Failed to write file to container {path}: {e}")
+        raise
 
 def run_tests_in_docker(task_id, repo, version, base_commit, feature_patch, feature_test_patch, f2p_test_names, p2p_test_names):
     if not client: return 0, 0, 0, 0, "Docker client unavailable"
@@ -46,14 +78,26 @@ def run_tests_in_docker(task_id, repo, version, base_commit, feature_patch, feat
         
         if feature_test_patch:
             _write_to_container(container, feature_test_patch, DOCKER_PATCH_PATH)
-            container.exec_run(f"git apply {DOCKER_PATCH_PATH}", workdir=wdir)
+            ec, out = container.exec_run(f"git apply {DOCKER_PATCH_PATH}", workdir=wdir)
             
+            if ec != 0:
+                error_msg = f"ERROR: Apply Test Patch Failed!\nOutput: {out.decode('utf-8', errors='replace')}"
+                print(error_msg) 
+                log.append(error_msg) 
+            else:
+                print("Test Patch applied successfully.")
+
         if feature_patch:
             _write_to_container(container, feature_patch, DOCKER_PATCH_PATH)
             ec, out = container.exec_run(f"git apply -p1 --ignore-whitespace {DOCKER_PATCH_PATH}", workdir=wdir)
             if ec != 0:
-                container.exec_run(f"git apply -p1 --reject {DOCKER_PATCH_PATH}", workdir=wdir)
-
+                print(f"Warning: Patch failed (code {ec}), trying --reject...")
+                ec_rej, out_rej = container.exec_run(f"git apply -p1 --reject {DOCKER_PATCH_PATH}", workdir=wdir)
+                if ec_rej != 0:
+                     msg = f"ERROR: Apply Feature Patch Failed!\n{out_rej.decode('utf-8', errors='replace')}"
+                     print(msg)
+                     log.append(msg)
+                     
         env = config['conda_env']
         # Pre-install
         cmds = config.get('pre_install', [])

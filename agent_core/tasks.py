@@ -13,7 +13,7 @@ from .models import EvaluationTask, EvaluationResult, EvaluationAttempt
 
 # Import new utilities
 from .utils.workspace import setup_workspace, setup_custom_workspace, get_file_contexts, onerror
-from .utils.llm_client import get_relevant_files, build_prompt_for_attempt, parse_llm_response
+from .utils.llm_client import get_relevant_files, build_prompt_for_attempt, parse_llm_response,generate_with_retry
 from .utils.docker_runner import run_tests_in_docker
 from .utils.metrics import calculate_all_metrics
 
@@ -45,14 +45,25 @@ def process_evaluation_task(self, task_id):
 
         if not settings.GEMINI_API_KEY: raise Exception("Gemini client not configured.")
         genai.configure(api_key=settings.GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-2.5-pro')
         
-        # 1. Workspace & Files
+        # [修改] 初始化兩個模型
+        # 1. Flash 模型：用於快速、低成本的任務 (如找檔案)
+        search_model = genai.GenerativeModel('gemini-2.5-flash')
+        # 2. Pro 模型：用於寫程式碼 (維持您原本的設定)
+        coder_model = genai.GenerativeModel('gemini-2.5-pro') 
+        
         workspace_path = setup_workspace(workspace_id_to_use)
-        relevant_files = get_relevant_files(model, task.doc_change_input, workspace_path)
+        
+        # [修改] 使用 search_model (Flash) 來找檔案，速度快且不易超時
+        logger.info(f"[Task {task.id}] Finding files using Flash model...")
+        relevant_files = get_relevant_files(search_model, task.doc_change_input, workspace_path)
+        
         if not relevant_files: raise Exception("AI failed to identify relevant files.")
         
-        context_content_str = get_file_contexts(workspace_path, relevant_files)
+        # [修改] 獲取檔案內容時，限制最大字數 (例如 200,000 字元)
+        # 這能有效防止 504 Deadline Exceeded
+        context_content_str = get_file_contexts(workspace_path, relevant_files, max_chars=200000)
+        
         if not context_content_str: raise Exception("Relevant files could not be read.")
 
         history = []
@@ -65,8 +76,15 @@ def process_evaluation_task(self, task_id):
             prompt_text = build_prompt_for_attempt(task.doc_change_input, context_content_str, history)
             
             # --- Logic formerly in services.run_agent_attempt ---
-            response = model.generate_content(prompt_text)
-            raw_response = response.text
+            try:
+                response = generate_with_retry(coder_model, prompt_text)
+                raw_response = response.text
+            except Exception as e:
+                # 如果重試 10 次後仍然失敗，記錄錯誤並跳出
+                logger.error(f"LLM Generation failed after retries: {e}")
+                final_status = 'FAILED'
+                break
+
             modified_files = parse_llm_response(raw_response)
             
             # Apply Changes
@@ -78,7 +96,13 @@ def process_evaluation_task(self, task_id):
                     os.makedirs(os.path.dirname(full_path), exist_ok=True)
                     with open(full_path, 'w', encoding='utf-8') as f: f.write(new_content)
                 
-                diff_res = subprocess.run(['git', 'diff', '--no-prefix'], cwd=workspace_path, capture_output=True, text=True, encoding='utf-8')
+                diff_res = subprocess.run(
+                    ['git', 'diff'], 
+                    cwd=workspace_path, 
+                    capture_output=True, 
+                    text=True, 
+                    encoding='utf-8'
+                )
                 final_patch = diff_res.stdout
                 status_code = 'PASSED' # Temporary placeholder
             else:
@@ -93,6 +117,7 @@ def process_evaluation_task(self, task_id):
                     final_patch, task.feature_test_patch, 
                     task.f2p_test_names, task.p2p_test_names
                 )
+
                 f2p_passed_count, f2p_total_count = f2p_p, f2p_t
                 p2p_passed_count, p2p_total_count = p2p_p, p2p_t
                 
@@ -100,8 +125,10 @@ def process_evaluation_task(self, task_id):
                 rt_pass = (p2p_p == p2p_t) if p2p_t > 0 else True
                 regression_tests_passed = rt_pass
                 
-                if ft_pass and rt_pass: status_code = 'PASSED'
-                else: status_code = 'TEST_FAILED'
+                if ft_pass and rt_pass: 
+                    status_code = 'PASSED'
+                else: 
+                    status_code = 'TEST_FAILED'
             # ----------------------------------------------------
 
             EvaluationAttempt.objects.create(

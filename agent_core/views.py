@@ -43,7 +43,7 @@ class EvaluationTaskViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['post'], url_path='start-all')
     def start_all_tasks(self, request):
         tasks_to_run = EvaluationTask.objects.filter(
-            status__in=['PENDING', 'FAILED', 'FAILED_APPLY', 'FAILED_TEST']
+            status__in=['PENDING', 'FAILED']#'FAILED_APPLY', 'FAILED_TEST'
         )
         count = 0
         for task in tasks_to_run:
