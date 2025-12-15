@@ -88,6 +88,8 @@ def get_file_contexts(workspace_path: str, relevant_files: list[str], max_chars:
             try:
                 with open(full_path, 'r', encoding='utf-8', errors='replace') as f:
                     content = f.read()
+                    
+                content = content.replace('\r\n', '\n')
                 
                 # 檢查是否即將超過限制
                 if total_chars + len(content) > max_chars:

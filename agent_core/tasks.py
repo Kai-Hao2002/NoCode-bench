@@ -94,8 +94,14 @@ def process_evaluation_task(self, task_id):
                     if '..' in file_path: continue
                     full_path = os.path.join(workspace_path, file_path)
                     os.makedirs(os.path.dirname(full_path), exist_ok=True)
-                    with open(full_path, 'w', encoding='utf-8') as f: f.write(new_content)
+                    
+                    # added newline='\n' to prevent CRLF on Windows
+                    # new line to ensure content itself does not contain CRLF (double safety)
+                    with open(full_path, 'w', encoding='utf-8', newline='\n') as f: 
+                        # write content with LF 
+                        f.write(new_content.replace('\r\n', '\n'))
                 
+                # Get Git Diff
                 diff_res = subprocess.run(
                     ['git', 'diff'], 
                     cwd=workspace_path, 
@@ -103,19 +109,26 @@ def process_evaluation_task(self, task_id):
                     text=True, 
                     encoding='utf-8'
                 )
-                final_patch = diff_res.stdout
-                status_code = 'PASSED' # Temporary placeholder
+                
+                # final_patch with LF endings
+                final_patch = diff_res.stdout.replace('\r\n', '\n')
+                
+                status_code = 'PASSED'
             else:
                 status_code = 'APPLY_FAILED'
                 final_patch = ""
 
             test_output = ""
             if status_code != 'APPLY_FAILED' and final_patch.strip():
+                
+                safe_p2p_names = list(set([t.split('[')[0] for t in task.p2p_test_names]))
+                
                 # Run Docker Tests
                 f2p_p, f2p_t, p2p_p, p2p_t, test_output = run_tests_in_docker(
                     str(task.id), task.repo, task.version, task.base_commit,
                     final_patch, task.feature_test_patch, 
-                    task.f2p_test_names, task.p2p_test_names
+                    task.f2p_test_names, 
+                    safe_p2p_names
                 )
 
                 f2p_passed_count, f2p_total_count = f2p_p, f2p_t

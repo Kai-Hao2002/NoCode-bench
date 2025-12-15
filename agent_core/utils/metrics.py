@@ -54,9 +54,12 @@ def calculate_all_metrics(
 
     # --- 2. RT%  ---
     if p2p_total_count > 0:
-        rt_percent = (p2p_passed_count / p2p_total_count) * 100.0
+        if p2p_passed_count == p2p_total_count:
+            rt_percent = 100.0
+        else:
+            rt_percent = 0.0
     else:
-        # No regression tests means RT% is 100%
+        # No regression tests means no regressions, so consider as fully passing
         rt_percent = 100.0
 
     # --- 3. FV-Macro ---
