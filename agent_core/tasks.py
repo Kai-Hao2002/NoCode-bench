@@ -46,22 +46,22 @@ def process_evaluation_task(self, task_id):
         if not settings.GEMINI_API_KEY: raise Exception("Gemini client not configured.")
         genai.configure(api_key=settings.GEMINI_API_KEY)
         
-        # [修改] 初始化兩個模型
-        # 1. Flash 模型：用於快速、低成本的任務 (如找檔案)
+
+        # 1. file retrieval setup
         search_model = genai.GenerativeModel('gemini-2.5-flash')
-        # 2. Pro 模型：用於寫程式碼 (維持您原本的設定)
+        # 2. use coder model for generation
         coder_model = genai.GenerativeModel('gemini-2.5-pro') 
         
         workspace_path = setup_workspace(workspace_id_to_use)
         
-        # [修改] 使用 search_model (Flash) 來找檔案，速度快且不易超時
+        # use Flash to find relevant files
         logger.info(f"[Task {task.id}] Finding files using Flash model...")
         relevant_files = get_relevant_files(search_model, task.doc_change_input, workspace_path)
         
         if not relevant_files: raise Exception("AI failed to identify relevant files.")
         
-        # [修改] 獲取檔案內容時，限制最大字數 (例如 200,000 字元)
-        # 這能有效防止 504 Deadline Exceeded
+        # fetch file contents
+        # limit to 200,000 chars
         context_content_str = get_file_contexts(workspace_path, relevant_files, max_chars=200000)
         
         if not context_content_str: raise Exception("Relevant files could not be read.")
@@ -80,7 +80,7 @@ def process_evaluation_task(self, task_id):
                 response = generate_with_retry(coder_model, prompt_text)
                 raw_response = response.text
             except Exception as e:
-                # 如果重試 10 次後仍然失敗，記錄錯誤並跳出
+                # if all retries fail
                 logger.error(f"LLM Generation failed after retries: {e}")
                 final_status = 'FAILED'
                 break

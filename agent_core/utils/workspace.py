@@ -76,8 +76,8 @@ def setup_custom_workspace(github_url: str) -> str:
 
 def get_file_contexts(workspace_path: str, relevant_files: list[str], max_chars: int = 200000) -> str:
     """
-    讀取檔案內容，但限制總字元數以避免 API Timeout (504)。
-    預設限制 200,000 字 (約 50k tokens)，這對大多數任務足夠且安全。
+    read relevant files from the workspace and return their contents concatenated.
+    do not exceed max_chars in total.
     """
     parts = []
     total_chars = 0
@@ -91,16 +91,16 @@ def get_file_contexts(workspace_path: str, relevant_files: list[str], max_chars:
                     
                 content = content.replace('\r\n', '\n')
                 
-                # 檢查是否即將超過限制
+                # check if adding this file exceeds max_chars
                 if total_chars + len(content) > max_chars:
                     remaining = max_chars - total_chars
-                    if remaining > 500: # 如果還剩一點空間，就截斷放入
+                    if remaining > 500: # if at least 500 chars can be added
                         content = content[:remaining] + "\n...[TRUNCATED DUE TO SIZE LIMIT]..."
                         parts.append(f"--- START OF FILE: {file_path} ---\n{content}\n--- END OF FILE: {file_path} ---\n")
                     else:
                         print(f"Skipping {file_path} due to context limit.")
                     
-                    # 超過限制後，停止讀取更多檔案，避免 Prompt 爆炸
+                    # reached max_chars, stop processing further files
                     break
                 
                 parts.append(f"--- START OF FILE: {file_path} ---\n{content}\n--- END OF FILE: {file_path} ---\n")

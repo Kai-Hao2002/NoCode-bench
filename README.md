@@ -1,23 +1,3 @@
-C:\Users\User\AppData\Local\Programs\Python\Python311\python.exe -m venv .venv
-.venv\Scripts\activate.bat
-pip install django djangorestframework celery redis google-genai python-dotenv psycopg2-binary pytest google-generativeai unidiff gevent gunicorn psycopg2-binary  whitenoise  dj-database-url
-//python manage.py startapp agent_core
-git config --global core.autocrlf false
-
-python manage.py makemigrations agent_core
-python manage.py migrate
-
-docker run -d -p 6379:6379 --name redis-broker redis
-celery -A nocode_project worker -l info -P solo
-celery -A nocode_project worker -l info
-celery -A nocode_project worker --loglevel=info -P gevent --concurrency=1
-python manage.py runserver
-
-python manage.py setup_codebases
-python manage.py load_benchmark_data
-
-curl -X POST http://127.0.0.1:8000/api/tasks/start-all/
-
 # NoCode-bench
 
 Build and evaluate an agent/system that reads a documentation change and implements the
@@ -161,3 +141,18 @@ curl -X POST http://127.0.0.1:8000/api/tasks/start-all/
 ```bash
 freeze > requirements.txt
 ```
+
+# Qick start
+.venv\Scripts\activate.bat
+
+python manage.py makemigrations agent_core
+python manage.py migrate
+
+python manage.py setup_codebases
+python manage.py load_benchmark_data
+
+docker run -d -p 6379:6379 --name redis-broker redis
+celery -A nocode_project worker --loglevel=info -P gevent --concurrency=1
+python manage.py runserver
+
+curl -X POST http://127.0.0.1:8000/api/tasks/start-all/
