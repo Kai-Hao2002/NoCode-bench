@@ -136,6 +136,12 @@ curl -X POST http://127.0.0.1:8000/api/tasks/start-all/
 
 ---
 
+## Unit Test
+
+```bash
+pytest --cov=agent_core --cov-branch --cov-report=term-missing
+```
+
 ## Deployment
 
 ```bash
@@ -144,6 +150,8 @@ freeze > requirements.txt
 
 # Qick start
 .venv\Scripts\activate.bat
+
+pytest --cov=agent_core --cov-branch --cov-report=term-missing
 
 python manage.py makemigrations agent_core
 python manage.py migrate

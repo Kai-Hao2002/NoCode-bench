@@ -73,3 +73,6 @@ whitenoise==6.11.0
 zope.event==6.0
 zope.interface==8.0.1
 docker==7.1.0
+coverage-7.13.1 
+pytest-cov-7.0.0
+pytest-django-4.11.1
