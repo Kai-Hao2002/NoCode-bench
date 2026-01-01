@@ -56,12 +56,12 @@ We evaluated our system on the **NoCode-bench Verified** dataset. The system's p
 ### **3.2.1 Metric Definitions**
 
 * **Success%**: The percentage of instances where **all** new feature tests (F2P) are passed and regression tests (P2P) are maintained.
-* **FV-Macro%**: The average pass rate of F2P tests across all instances (indicates partial progress on features).
-* **FV-Micro%**: The ratio of the total number of passed F2P tests to the total number of F2P tests across the dataset.
+* **FV-Macro%**: The average pass rate of F2P tests across an instance (indicates partial progress on features).
+* **FV-Micro%**: The ratio of the total number of passed F2P tests to the total number of F2P tests across all instances.
 * **RT% (Regression Testing)**: The percentage of instances where **all** regression tests (P2P) remain passing.
 * **Applied%**: The percentage of instances where the generated patch was successfully applied (valid git diff).
 * **File%**: The ratio of correctly modified file paths to the ground truth modified file paths (localization accuracy).
-* **#Token**: Average token usage per instance.
+* **#Token**: Total token usage on all instances.
 
 ### **3.2.2 Overall Benchmark Performance**
 
