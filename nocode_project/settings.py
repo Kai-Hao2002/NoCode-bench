@@ -19,6 +19,7 @@ if RENDER_EXTERNAL_HOSTNAME:
 
 # Application definition
 INSTALLED_APPS = [
+    'corsheaders',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -32,6 +33,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     # (Whitenoise should be after sessions)
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware', 
     'django.middleware.common.CommonMiddleware',
@@ -125,3 +127,4 @@ CELERY_RESULT_SERIALIZER = 'json'
 # --- Gemini API Key ---
 GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
 print(f"DEBUG: Gemini Key Load Status: {bool(GEMINI_API_KEY)}")
+CORS_ALLOW_ALL_ORIGINS = True

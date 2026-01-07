@@ -211,6 +211,12 @@ def process_custom_demo_task(self, task_id):
         
         # Simple Agent Run (No Docker)
         response = model.generate_content(prompt)
+        
+        # 1. Apply Changes
+        token_count = 0
+        if response.usage_metadata:
+            token_count = response.usage_metadata.total_token_count
+            
         modified_files = parse_llm_response(response.text)
         
         final_patch = ""
@@ -227,11 +233,22 @@ def process_custom_demo_task(self, task_id):
         else:
             task.status = 'FAILED_APPLY'
 
+        # 2. Calculate run time
+        end_time = timezone.now()
+        run_time = (end_time - task.start_time).total_seconds()
+
+        # 3. Save Result
         EvaluationResult.objects.create(
-            task=task, generated_patch=final_patch, applied_percent=100.0 if task.status=='COMPLETED' else 0.0,
-            p2p_passed_count=-1, p2p_total_count=-1 
+            task=task, 
+            generated_patch=final_patch, 
+            applied_percent=100.0 if task.status=='COMPLETED' else 0.0,
+            p2p_passed_count=-1, 
+            p2p_total_count=-1,
+            num_token=token_count,        
+            run_time_seconds=run_time     
         )
-        task.end_time = timezone.now()
+        
+        task.end_time = end_time
         task.save()
         
     except Exception as e:

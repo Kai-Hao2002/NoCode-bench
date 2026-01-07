@@ -146,6 +146,12 @@ pytest --cov=agent_core --cov-branch --cov-report=term-missing
 
 ```bash
 freeze > requirements.txt
+nano .env
+nano nocode_project/settings.py
+nano nginx.conf
+docker compose up -d --build
+docker compose logs worker
+
 ```
 
 # Qick start
