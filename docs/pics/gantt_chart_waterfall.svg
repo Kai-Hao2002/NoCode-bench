@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 500">
+  <defs>
+    <style>
+      .title { font-family: 'Segoe UI', Arial, sans-serif; font-size: 24px; font-weight: bold; fill: #2C3E50; }
+      .subtitle { font-family: 'Segoe UI', Arial, sans-serif; font-size: 14px; fill: #5D6D7E; }
+      .task-label { font-family: 'Segoe UI', Arial, sans-serif; font-size: 13px; fill: #2C3E50; }
+      .date-label { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; fill: #7F8C8D; }
+      .month-label { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; font-weight: 600; fill: #34495E; }
+      .bar { rx: 4; ry: 4; }
+      .bar-phase1 { fill: #3498DB; opacity: 0.85; }
+      .bar-phase2 { fill: #9B59B6; opacity: 0.85; }
+      .bar-phase3 { fill: #E74C3C; opacity: 0.85; }
+      .bar-phase4 { fill: #F39C12; opacity: 0.85; }
+      .bar-phase5 { fill: #1ABC9C; opacity: 0.85; }
+      .bar-phase6 { fill: #2ECC71; opacity: 0.85; }
+      .milestone { fill: #E74C3C; stroke: #C0392B; stroke-width: 2; }
+      .grid-line { stroke: #E8E8E8; stroke-width: 1; stroke-dasharray: 3,3; }
+      .axis-line { stroke: #BDC3C7; stroke-width: 2; }
+    </style>
+  </defs>
+  
+  <!-- Title -->
+  <text x="700" y="30" class="title" text-anchor="middle">NoCode_Bench Project Timeline</text>
+  <text x="700" y="50" class="subtitle" text-anchor="middle">November 1, 2024 - January 31, 2025 (90 Days)</text>
+  
+  <!-- Timeline Header -->
+  <line x1="280" y1="80" x2="1350" y2="80" class="axis-line"/>
+  
+  <!-- Month Labels -->
+  <text x="450" y="100" class="month-label" text-anchor="middle">November 2024</text>
+  <text x="780" y="100" class="month-label" text-anchor="middle">December 2024</text>
+  <text x="1110" y="100" class="month-label" text-anchor="middle">January 2025</text>
+  
+  <!-- Vertical Grid Lines (every 10 days) -->
+  <line x1="390" y1="110" x2="390" y2="450" class="grid-line"/>
+  <line x1="500" y1="110" x2="500" y2="450" class="grid-line"/>
+  <line x1="610" y1="110" x2="610" y2="450" class="grid-line"/>
+  <line x1="720" y1="110" x2="720" y2="450" class="grid-line"/>
+  <line x1="830" y1="110" x2="830" y2="450" class="grid-line"/>
+  <line x1="940" y1="110" x2="940" y2="450" class="grid-line"/>
+  <line x1="1050" y1="110" x2="1050" y2="450" class="grid-line"/>
+  <line x1="1160" y1="110" x2="1160" y2="450" class="grid-line"/>
+  <line x1="1270" y1="110" x2="1270" y2="450" class="grid-line"/>
+  
+  <!-- Task 1: Project Initiation & Requirement Analysis (Nov 1-10) -->
+  <text x="20" y="145" class="task-label">Project Initiation &amp;</text>
+  <text x="20" y="160" class="task-label">Requirement Analysis</text>
+  <rect x="280" y="130" width="110" height="35" class="bar bar-phase1"/>
+  <text x="335" y="152" class="date-label" text-anchor="middle" fill="black" font-weight="600">Nov 1-10</text>
+  
+  <!-- Task 2: System Architecture & Design (Nov 11-20) -->
+  <text x="20" y="205" class="task-label">System Architecture</text>
+  <text x="20" y="220" class="task-label">&amp; Design</text>
+  <rect x="390" y="190" width="110" height="35" class="bar bar-phase2"/>
+  <text x="445" y="212" class="date-label" text-anchor="middle" fill="black" font-weight="600">Nov 11-20</text>
+  
+  <!-- Task 3: Core Development (Nov 21 - Dec 20) -->
+  <text x="20" y="265" class="task-label">Core Development</text>
+  <text x="20" y="280" class="task-label">(Backend, Frontend, Agent)</text>
+  <rect x="500" y="250" width="330" height="35" class="bar bar-phase3"/>
+  <text x="665" y="272" class="date-label" text-anchor="middle" fill="black" font-weight="600">Nov 21 - Dec 20</text>
+  
+  <!-- Task 4: Integration (Dec 21-31) -->
+  <text x="20" y="325" class="task-label">Integration</text>
+  <rect x="830" y="310" width="110" height="35" class="bar bar-phase4"/>
+  <text x="885" y="332" class="date-label" text-anchor="middle" fill="black" font-weight="600">Dec 21-31</text>
+  
+  <!-- Task 5: Testing & Evaluation (Jan 1-15) -->
+  <text x="20" y="385" class="task-label">Testing &amp; Evaluation</text>
+  <rect x="940" y="370" width="165" height="35" class="bar bar-phase5"/>
+  <text x="1022" y="392" class="date-label" text-anchor="middle" fill="black" font-weight="600">Jan 1-15</text>
+  
+  <!-- Milestone Marker (Jan 15) -->
+  <polygon points="1105,360 1115,370 1105,380 1095,370" class="milestone"/>
+  <text x="1110" y="355" class="date-label" font-weight="bold" fill="#E74C3C">★ Mid-Project Review</text>
+  
+  <!-- Task 6: Documentation & Deployment (Jan 16-31) -->
+  <text x="20" y="445" class="task-label">Documentation &amp;</text>
+  <text x="20" y="460" class="task-label">Deployment</text>
+  <rect x="1105" y="430" width="165" height="35" class="bar bar-phase6"/>
+  <text x="1187" y="452" class="date-label" text-anchor="middle" fill="black" font-weight="600">Jan 16-31</text>
+  
+  <!-- Legend -->
+  <text x="1300" y="485" class="date-label" text-anchor="end">Waterfall Model</text>
+</svg>

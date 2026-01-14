@@ -10,8 +10,42 @@ code { font-family: 'Consolas', monospace !important; color: green; background-c
 # **Project Management Report**
 
 ## **1. Project Timeline & Milestones**
-The project followed an xx-day development cycle using a waterfall-style Gantt plan.
-![Gantt Chart](pics/gantt_chart_waterfall.svg)
+**Project:** NoCode_Bench  
+**Start Date:** November 1, 2024  
+**End Date:** January 31, 2025  
+**Total Duration:** 90 Days  
+**Key Milestone:** January 15, 2025 (Mid-Project Review)
+
+| Date | Tasks |
+| :--- | :--- |
+| 2024.11.01 - 2024.11.10 | Project Initiation & Requirement Analysis |
+| 2024.11.11 - 2024.11.20 | System Architecture & Design |
+| 2024.11.21 - 2024.12.20 | Core Development - Backend & Frontend & Agent |
+| 2024.12.21 - 2024.12.31 | Integration |
+| 2025.01.01 - 2025.01.15 | Testing & Evaluation |
+| 2025.01.16 - 2025.01.31 | Documentation & Deployment |
+
+```mermaid
+gantt
+    title NoCode_Bench Project Timeline (Waterfall Model)
+    dateFormat YYYY-MM-DD
+    axisFormat %b %d
+
+    section Phase 1: Planning
+    Project Initiation & Requirement Analysis :done, p1, 2024-11-01, 2024-11-10
+    System Architecture & Design              :done, p2, 2024-11-11, 2024-11-20
+
+    section Phase 2: Development
+    Core Development (Backend, Frontend, Agent) :active, d1, 2024-11-21, 2024-12-20
+    Integration                                 :crit, d2, 2024-12-21, 2024-12-31
+
+    section Phase 3: Testing & Deployment
+    Testing & Evaluation                      :t1, 2025-01-01, 2025-01-15
+    ★ Mid-Project Review                      :milestone, m1, 2025-01-15, 0d
+    Documentation & Deployment                :t2, 2025-01-16, 2025-01-31
+```
+
+![Gantt Chart SVG](pics/gantt_chart_waterfall.svg)
 
 ## **2. System Architecture**
 xxxx.
@@ -26,6 +60,10 @@ xxxx.
 ## **3. Team Roles & Responsibilities**
 | Name | Role | Key Contributions |
 | :--- | :--- | :--- |
-| **Name** | xxx | xxx. |
+| **Kai-Hao, Yang** | Project Lead & AI Architect | Led the overall project direction and system design; architected and orchestrated agentic workflows across the platform. |
+| **Hao Lin** | Backend & Evaluation Engineer | Test and engineered the automated evaluation pipeline. |
+| **Han Hu** | Infrastructure & DevOps Engineer | Built Docker sandboxes and automated benchmark environment deployment. |
+| **Kaihui, You** | Frontend & UI/UX Designer | Design and implement UI components and page layouts, Handle styling and responsive design. |
+| **Hsuan Lien** | Frontend & API Integration Engineer | Integrate frontend with backend APIs, Handle routing, and error handling. |
 
 ## **4. Current Progress and Future Plans**
