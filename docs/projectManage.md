@@ -25,26 +25,6 @@ code { font-family: 'Consolas', monospace !important; color: green; background-c
 | 2025.01.01 - 2025.01.15 | Testing & Evaluation |
 | 2025.01.16 - 2025.01.31 | Documentation & Deployment |
 
-```mermaid
-gantt
-    title NoCode_Bench Project Timeline (Waterfall Model)
-    dateFormat YYYY-MM-DD
-    axisFormat %b %d
-
-    section Phase 1: Planning
-    Project Initiation & Requirement Analysis :done, p1, 2024-11-01, 2024-11-10
-    System Architecture & Design              :done, p2, 2024-11-11, 2024-11-20
-
-    section Phase 2: Development
-    Core Development (Backend, Frontend, Agent) :active, d1, 2024-11-21, 2024-12-20
-    Integration                                 :crit, d2, 2024-12-21, 2024-12-31
-
-    section Phase 3: Testing & Deployment
-    Testing & Evaluation                      :t1, 2025-01-01, 2025-01-15
-    ★ Mid-Project Review                      :milestone, m1, 2025-01-15, 0d
-    Documentation & Deployment                :t2, 2025-01-16, 2025-01-31
-```
-
 ![Gantt Chart SVG](pics/gantt_chart_waterfall.svg)
 
 ## **2. System Architecture**
