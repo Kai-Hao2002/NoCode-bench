@@ -14,9 +14,25 @@ img { max-width: 100%; height: auto; border: 1px solid #ddd; box-shadow: 0 4px 8
 
 # **3. Testing Report**
 
+## **Table of Contents**
+1. [Unit Test](#unit-test)
+   - [Detailed Coverage Analysis](#detailed-coverage-analysis)
+2. [Performance Evaluation](#performance-evaluation)
+   - [Metric Definitions](#metric-definitions)
+   - [Overall Benchmark Performance](#overall-benchmark-performance)
+   - [Ablation Studies](#ablation-studies)
+3. [Error Analysis](#error-analysis)
+   - [Pattern 1: Wrong Patch Structure (Context Mismatch)](#pattern-1-wrong-patch-structure-context-mismatch)
+   - [Pattern 2: Missing Dependencies (Import Errors)](#pattern-2-missing-dependencies-import-errors)
+   - [Pattern 3: Hallucinated Function Usage](#pattern-3-hallucinated-function-usage)
+   - [Pattern 4: Incomplete Fix (Logic Failure)](#pattern-4-incomplete-fix-logic-failure)
+4. [References](#references)
+
+<div style="page-break-after: always;"></div>
+
 To ensure the overall quality and reliability of the **NoCode-bench** system, we conducted a comprehensive evaluation. This report covers the unit testing of our system components, the overall performance on the benchmark dataset using official metrics, and a detailed error analysis of the failure cases.
 
-## **3.1 Unit Test**
+## <span id="unit-test">**3.1 Unit Test**</span>
 We implemented rigorous unit tests for the backend system (`agent_core`) to ensure the reliability of critical modules, including the Docker runner, LLM interaction, and Metric calculations. The tests were executed using `pytest` and analyzed with `coverage.py`.
 
 The table below (Figure 1) summarizes our unit test coverage metrics. The system achieved an overall code coverage of **72%**, with **77%** statement coverage.
@@ -29,7 +45,7 @@ The table below (Figure 1) summarizes our unit test coverage metrics. The system
 
 <div style="page-break-after: always;"></div>
 
-### **Detailed Coverage Analysis**
+### <span id="detailed-coverage-analysis">**Detailed Coverage Analysis**</span>
 
 The evaluation highlights the stability of our core infrastructure and business logic:
 
@@ -49,11 +65,11 @@ The evaluation highlights the stability of our core infrastructure and business 
 
 > *Table 1: Breakdown of coverage metrics for critical system components.*
 
-## **3.2 Performance Evaluation**
+## <span id="performance-evaluation">**3.2 Performance Evaluation**</span>
 
 We evaluated our system on the **NoCode-bench Verified** dataset. The system's performance is measured using the official metrics defined in the NoCode-bench paper [1].
 
-### **3.2.1 Metric Definitions**
+### <span id="metric-definitions">**3.2.1 Metric Definitions**</span>
 
 * **Success%**: The percentage of instances where **all** new feature tests (F2P) are passed and regression tests (P2P) are maintained.
 * **FV-Macro%**: The average pass rate of F2P tests across an instance (indicates partial progress on features).
@@ -63,7 +79,7 @@ We evaluated our system on the **NoCode-bench Verified** dataset. The system's p
 * **File%**: The ratio of correctly modified file paths to the ground truth modified file paths (localization accuracy).
 * **#Token**: Total token usage on all instances.
 
-### **3.2.2 Overall Benchmark Performance**
+### <span id="overall-benchmark-performance">**3.2.2 Overall Benchmark Performance**</span>
 
 We compared our **Agentic Method (Gemini-2.5-Pro)** against two baselines:
 1.  **OpenHands (Gemini-2.5-Pro)** [1]: A state-of-the-art autonomous agent framework.
@@ -89,7 +105,7 @@ The results are summarized in **Table 1**.
 
 <div style="page-break-after: always;"></div>
 
-### **3.2.3 Ablation Studies**
+### <span id="ablation-studies">**3.2.3 Ablation Studies**</span>
 
 To verify the effectiveness of the agentic workflow (iterative refinement with Docker feedback) versus a direct generation approach, we analyze the contribution of the components:
 
@@ -100,10 +116,10 @@ To verify the effectiveness of the agentic workflow (iterative refinement with D
 
 **Conclusion:** The agentic workflow trades a small amount of stability (RT%) for a greater capability to solve novel feature requests (FV-Macro), proving beneficial for complex problem-solving.
 
-## **3.3 Error Analysis**
+## <span id="error-analysis">**3.3 Error Analysis**</span>
 We conducted an in-depth analysis of the 114 evaluated instances to identify common failure patterns. Our analysis revealed four primary categories of errors that hinder the agent's performance. Below, we provide a concrete example for each category, identified by its Task ID.
 
-### **Pattern 1: Wrong Patch Structure (Context Mismatch)**
+### <span id="pattern-1-wrong-patch-structure-context-mismatch">**Pattern 1: Wrong Patch Structure (Context Mismatch)**</span>
 * **Description:** The agent generates a patch that cannot be applied by `git apply` because the context provided in the patch (the code surrounding the change) does not match the actual codebase. This often happens when the agent hallucinates code lines or edits an outdated version of the file.
 * **Task ID:** 81 (`scikit-learn__scikit-learn-26786`)
 * **Error Log:**
@@ -118,7 +134,7 @@ We conducted an in-depth analysis of the 114 evaluated instances to identify com
     ```
 * **Analysis:** The agent attempted to modify `sklearn/base.py` but failed to reproduce the exact indentation and surrounding comments required for the `diff` to match. As a result, the patch was rejected before any tests could run.
 
-### **Pattern 2: Missing Dependencies (Import Errors)**
+### <span id="pattern-2-missing-dependencies-import-errors">**Pattern 2: Missing Dependencies (Import Errors)**</span>
 * **Description:** The agent introduces imports for libraries or modules that are not installed in the environment or attempts to import names that do not exist in the specified module versions.
 * **Task ID:** 21 (`pydata__xarray-3733`)
 * **Error Log:**
@@ -129,7 +145,7 @@ We conducted an in-depth analysis of the 114 evaluated instances to identify com
     ```
 * **Analysis:** In this instance, the agent added a dependency on `least_squares` (likely from `scipy.optimize` or similar) but failed to import it correctly or used a version of the library where this function was not exposed as expected, causing the test collection phase to crash.
 
-### **Pattern 3: Hallucinated Function Usage**
+### <span id="pattern-3-hallucinated-function-usage">**Pattern 3: Hallucinated Function Usage**</span>
 * **Description:** The agent tries to call a function, attribute, or method that does not exist in the codebase. This is a common LLM hallucination where the model "invents" a convenient API to solve the problem.
 * **Task ID:** 107 (`astropy__astropy-11691`)
 * **Error Log:**
@@ -141,7 +157,7 @@ We conducted an in-depth analysis of the 114 evaluated instances to identify com
 
 <div style="page-break-after: always;"></div>
 
-### **Pattern 4: Incomplete Fix (Logic Failure)**
+### <span id="pattern-4-incomplete-fix-logic-failure">**Pattern 4: Incomplete Fix (Logic Failure)**</span>
 * **Description:** The patch is applied successfully, and the code runs without crashing, but the logic fails to satisfy the specific assertions in the new feature tests (F2P).
 * **Task ID:** 5 (`matplotlib__matplotlib-23525`)
 * **Error Log:**
@@ -155,7 +171,7 @@ We conducted an in-depth analysis of the 114 evaluated instances to identify com
 * **Analysis:** The agent was tasked with implementing a feature for `bar_labels`. While the code was syntactically correct (no crash), the test results (`FFF`) show that the implementation returned default values (`'0'`) instead of the expected labels (`'A', 'B', 'C'`), indicating that the core logic of the feature was not correctly implemented.
 
 ---
-## **References**
+## <span id="references">**References**</span>
 
 [1] **NoCode-bench Paper**: *Official Evaluation Metrics & OpenHands Performance*. (2025). Available at: [https://arxiv.org/pdf/2507.18130](https://arxiv.org/pdf/2507.18130)
 

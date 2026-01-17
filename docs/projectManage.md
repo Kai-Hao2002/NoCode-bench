@@ -9,7 +9,17 @@ code { font-family: 'Consolas', monospace !important; color: green; background-c
 
 # **Project Management Report**
 
-## **1. Project Timeline & Milestones**
+## **Table of Contents**
+1. [Project Timeline & Milestones](#project-timeline--milestones)
+2. [System Architecture](#system-architecture)
+3. [Method](#method)
+4. [Team Roles & Responsibilities](#team-roles--responsibilities)
+5. [Future Plans](#future-plans)
+
+<div style="page-break-after: always;"></div>
+
+## <span id="project-timeline--milestones">**1. Project Timeline & Milestones**</span>
+
 **Project:** NoCode_Bench  
 **Start Date:** November 1, 2025  
 **End Date:** January 31, 2026  
@@ -27,7 +37,7 @@ code { font-family: 'Consolas', monospace !important; color: green; background-c
 
 ![Gantt Chart SVG](pics/gantt_chart_waterfall.svg)
 
-## **2. System Architecture**
+## <span id="system-architecture">**2. System Architecture**</span>
 
 The NoCode-bench system is built on a distributed, asynchronous architecture designed to handle documentation-driven code generation and containerized validation. The architecture consists of four primary layers:
 
@@ -38,7 +48,7 @@ The NoCode-bench system is built on a distributed, asynchronous architecture des
 
 <p align="center"><img src="pics/sys_arc.png" width="90%"></p>
 
-## **3. Method**
+## <span id="method">**3. Method**</span>
 | Component | Choice | Rationale |
 | :--- | :--- | :--- |
 | **File Retrieval** | LLM-based Semantic Filtering (Gemini-2.5-Flash) with Path Scanning | Uses high-speed LLM reasoning to identify core files from a large codebase (up to 3000 paths) before fetching full content, ensuring the context remains relevant and within token limits. |
@@ -46,7 +56,7 @@ The NoCode-bench system is built on a distributed, asynchronous architecture des
 | **Docker Validation** | Isolated Containerized Testing (F2P & P2P) | Provides a reproducible and safe environment to verify patches by running existing tests (Pass-to-Pass) and new feature tests (Fail-to-Pass) to ensure functional correctness without regressions. |
 | **Self-Correction Loop** | Iterative Error-Feedback Loop (Attempt-based) | Captures execution failures and test logs to feed back into the model's context, allowing the agent to analyze logic errors and refine its implementation in subsequent attempts. |
 
-## **4. Team Roles & Responsibilities**
+## <span id="team-roles--responsibilities">**4. Team Roles & Responsibilities**</span>
 | Name | Role | Key Contributions |
 | :--- | :--- | :--- |
 | **Kai-Hao, Yang** | Project Lead & AI Architect | Led the overall project direction and system design; architected and orchestrated agentic workflows across the platform. |
@@ -55,7 +65,7 @@ The NoCode-bench system is built on a distributed, asynchronous architecture des
 | **Kaihui, You** | Frontend & UI/UX Designer | Design and implement UI components and page layouts, Handle styling and responsive design. |
 | **Hsuan Lien** | Frontend & API Integration Engineer | Integrate frontend with backend APIs, Handle routing, and error handling. |
 
-## **5. Future Plans**
+## <span id="future-plans">**5. Future Plans**</span>
 
 To enhance the performance and versatility of the NoCode-bench platform, several key technical improvements are planned based on the current system's architecture:
 
