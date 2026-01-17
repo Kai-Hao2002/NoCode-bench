@@ -13,7 +13,7 @@ code { font-family: 'Consolas', monospace !important; color: green; background-c
 **Project:** NoCode_Bench  
 **Start Date:** November 1, 2025  
 **End Date:** January 31, 2026  
-**Total Duration:** 90 Days   
+**Total Duration:** 90 Days  
 **Key Milestone:** January 15, 2026 (Mid-Project Review)
 
 | Date | Tasks |
