@@ -46,7 +46,7 @@ The NoCode-bench system is built on a distributed, asynchronous architecture des
 | **Docker Validation** | Isolated Containerized Testing (F2P & P2P) | Provides a reproducible and safe environment to verify patches by running existing tests (Pass-to-Pass) and new feature tests (Fail-to-Pass) to ensure functional correctness without regressions. |
 | **Self-Correction Loop** | Iterative Error-Feedback Loop (Attempt-based) | Captures execution failures and test logs to feed back into the model's context, allowing the agent to analyze logic errors and refine its implementation in subsequent attempts. |
 
-## **3. Team Roles & Responsibilities**
+## **4. Team Roles & Responsibilities**
 | Name | Role | Key Contributions |
 | :--- | :--- | :--- |
 | **Kai-Hao, Yang** | Project Lead & AI Architect | Led the overall project direction and system design; architected and orchestrated agentic workflows across the platform. |
@@ -55,7 +55,7 @@ The NoCode-bench system is built on a distributed, asynchronous architecture des
 | **Kaihui, You** | Frontend & UI/UX Designer | Design and implement UI components and page layouts, Handle styling and responsive design. |
 | **Hsuan Lien** | Frontend & API Integration Engineer | Integrate frontend with backend APIs, Handle routing, and error handling. |
 
-## ** 4.Future Plans**
+## **5. Future Plans**
 
 To enhance the performance and versatility of the NoCode-bench platform, several key technical improvements are planned based on the current system's architecture:
 
