@@ -55,4 +55,12 @@ The NoCode-bench system is built on a distributed, asynchronous architecture des
 | **Kaihui, You** | Frontend & UI/UX Designer | Design and implement UI components and page layouts, Handle styling and responsive design. |
 | **Hsuan Lien** | Frontend & API Integration Engineer | Integrate frontend with backend APIs, Handle routing, and error handling. |
 
-## **4. Current Progress and Future Plans**
+## ** 4.Future Plans**
+
+To enhance the performance and versatility of the NoCode-bench platform, several key technical improvements are planned based on the current system's architecture:
+
+* **Dynamic Multi-Attempt Self-Correction**: The current system is limited to a single generation attempt per task (`MAX_ATTEMPTS = 1`). Future versions will implement a dynamic budget for self-correction, allowing the agent to perform multiple iterative fixes based on more granular feedback from test failure logs.
+* **Enhanced Retrieval for Large-Scale Codebases**: Currently, the file retrieval component scans a maximum of 3,000 files and is restricted by a 200,000-character context limit. We plan to implement a more scalable RAG (Retrieval-Augmented Generation) approach or a hierarchical directory-traversal agent to handle enterprise-level repositories.
+* **Broadening Framework and Language Support**: The system is currently optimized for Python-based repositories like Django and scikit-learn. Future updates will include specialized Docker environments and configuration mappings for other ecosystems such as JavaScript (Node.js), Go, and Java to evaluate cross-language documentation-driven coding.
+* **Advanced Multi-Agent Collaboration**: The architecture currently uses a two-stage sequential pipeline (Flash for search, Pro for coding). We aim to transition to a multi-agent framework where specialized agents (e.g., a 'Reviewer Agent' and a 'Debugger Agent') collaborate to verify code quality and security before the final execution in Docker.
+* **Integration of Real-Time Evaluation Metrics**: Beyond the existing Fail-to-Pass (F2P) and Pass-to-Pass (P2P) metrics, we plan to incorporate code complexity analysis and token efficiency tracking directly into the results dashboard to provide deeper insights into the agent's implementation efficiency.
