@@ -10,11 +10,13 @@ code { font-family: 'Consolas', monospace !important; color: green; background-c
 # **Project Management Report**
 
 ## **Table of Contents**
-1. [Project Timeline & Milestones](#project-timeline--milestones)
-2. [System Architecture](#system-architecture)
-3. [Method](#method)
-4. [Team Roles & Responsibilities](#team-roles--responsibilities)
-5. [Future Plans](#future-plans)
+- [**Project Management Report**](#project-management-report)
+  - [**Table of Contents**](#table-of-contents)
+  - [**1. Project Timeline \& Milestones**](#1-project-timeline--milestones)
+  - [**2. System Architecture**](#2-system-architecture)
+  - [**3. Method**](#3-method)
+  - [**4. Team Roles \& Responsibilities**](#4-team-roles--responsibilities)
+  - [**5. Future Plans**](#5-future-plans)
 
 <div style="page-break-after: always;"></div>
 
@@ -48,6 +50,32 @@ The NoCode-bench system is built on a distributed, asynchronous architecture des
 
 <p align="center"><img src="pics/sys_arc.png" width="90%"></p>
 
+The NoCode-bench pipeline automates the transition from a natural-language documentation change to a verified code implementation through a structured multi-stage process:
+
+1.  **Environment Initialization**:
+    * The system creates a isolated workspace by cloning the target repository or copying a verified codebase into a temporary directory.
+    * Git is initialized within the workspace to track changes and generate patches.
+
+2.  **AI-Driven File Retrieval**:
+    * The system scans the repository for relevant file paths (e.g., `.py`, `.html`, `.js`).
+    * **Gemini-2.5-Flash** identifies core files necessary for the change, and the system extracts their content up to a 200,000-character limit to form the LLM context.
+
+3.  **Patch Generation**:
+    * **Gemini-2.5-Pro** processes the documentation change and file contents to generate new code.
+    * The agent is instructed to provide full file contents using a specific delimiter format to ensure successful application to the workspace.
+
+4.  **Containerized Validation**:
+    * The generated patch is transferred to a pre-configured Docker container matching the project's environment (e.g., Django, scikit-learn).
+    * The system applies the code patch alongside a specific "feature test patch" and executes the project's test suite using `conda` or `pytest`.
+
+5.  **Iterative Self-Correction**:
+    * If the tests fail, the system captures the error logs and includes them in the history for a subsequent attempt.
+    * The agent analyzes these errors to refine the logic and generate an updated patch.
+
+6.  **Results & Metrics Finalization**:
+    * The system calculates performance metrics, including Fail-to-Pass (F2P) and Pass-to-Pass (P2P) success rates, token usage, and execution time.
+    * The final status (e.g., `COMPLETED`, `FAILED_TEST`) and the generated patch are saved to the database for user inspection.
+  
 ## <span id="method">**3. Method**</span>
 | Component | Choice | Rationale |
 | :--- | :--- | :--- |
