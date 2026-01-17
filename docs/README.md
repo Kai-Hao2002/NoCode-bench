@@ -51,6 +51,16 @@ The extension will generate a .pdf file in the same directory as the source Mark
 4. Advanced Configuration (Optional)
 The reports use custom <style> blocks for fonts (Montserrat) and colors. If the fonts do not render correctly in your local environment, ensure you have an active internet connection so the extension can fetch the Google Fonts linked in the files.
 
+## Removing Header Timestamp
+To remove the timestamp from the top of the PDF pages:
+
+1. Open VS Code Settings (Ctrl+, or Cmd+,)
+2. Search for: `@id:markdown-pdf.headerTemplate`
+3. Copy and paste the following code into the setting field:
+```html
+<div style="font-size: 9px; margin-left: 1cm;"> <span class='title'></span></div> <div style="font-size: 9px; margin-left: auto; margin-right: 1cm; ">%%ISO-DATE%%</div>
+```
+
 Common Troubleshooting
 Page Breaks: The reports use <div style="page-break-after: always;"></div> to manage layout. The Markdown PDF extension respects these tags during export.
 
