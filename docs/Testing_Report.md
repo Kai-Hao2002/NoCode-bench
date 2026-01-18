@@ -32,7 +32,7 @@ img { max-width: 100%; height: auto; border: 1px solid #ddd; box-shadow: 0 4px 8
 
 To ensure the overall quality and reliability of the **NoCode-bench** system, we conducted a comprehensive evaluation. This report covers the unit testing of our system components, the overall performance on the benchmark dataset using official metrics, and a detailed error analysis of the failure cases.
 
-## <span id="unit-test">**3.1 Unit Test**</span>
+## <span id="unit-test">**1. Unit Test**</span>
 We implemented rigorous unit tests for the backend system (`agent_core`) to ensure the reliability of critical modules, including the Docker runner, LLM interaction, and Metric calculations. The tests were executed using `pytest` and analyzed with `coverage.py`.
 
 The table below (Figure 1) summarizes our unit test coverage metrics. The system achieved an overall code coverage of **72%**, with **77%** statement coverage.
@@ -65,11 +65,11 @@ The evaluation highlights the stability of our core infrastructure and business 
 
 > *Table 1: Breakdown of coverage metrics for critical system components.*
 
-## <span id="performance-evaluation">**3.2 Performance Evaluation**</span>
+## <span id="performance-evaluation">**2 Performance Evaluation**</span>
 
 We evaluated our system on the **NoCode-bench Verified** dataset. The system's performance is measured using the official metrics defined in the NoCode-bench paper [1].
 
-### <span id="metric-definitions">**3.2.1 Metric Definitions**</span>
+### <span id="metric-definitions">**2.1 Metric Definitions**</span>
 
 * **Success%**: The percentage of instances where **all** new feature tests (F2P) are passed and regression tests (P2P) are maintained.
 * **FV-Macro%**: The average pass rate of F2P tests across an instance (indicates partial progress on features).
@@ -79,7 +79,7 @@ We evaluated our system on the **NoCode-bench Verified** dataset. The system's p
 * **File%**: The ratio of correctly modified file paths to the ground truth modified file paths (localization accuracy).
 * **#Token**: Total token usage on all instances.
 
-### <span id="overall-benchmark-performance">**3.2.2 Overall Benchmark Performance**</span>
+### <span id="overall-benchmark-performance">**2.2 Overall Benchmark Performance**</span>
 
 We compared our **Agentic Method (Gemini-2.5-Pro)** against two baselines:
 1.  **OpenHands (Gemini-2.5-Pro)** [1]: A state-of-the-art autonomous agent framework.
@@ -105,7 +105,7 @@ The results are summarized in **Table 1**.
 
 <div style="page-break-after: always;"></div>
 
-### <span id="ablation-studies">**3.2.3 Ablation Studies**</span>
+### <span id="ablation-studies">**2.3 Ablation Studies**</span>
 
 To verify the effectiveness of the agentic workflow (iterative refinement with Docker feedback) versus a direct generation approach, we analyze the contribution of the components:
 
@@ -116,7 +116,7 @@ To verify the effectiveness of the agentic workflow (iterative refinement with D
 
 **Conclusion:** The agentic workflow trades a small amount of stability (RT%) for a greater capability to solve novel feature requests (FV-Macro), proving beneficial for complex problem-solving.
 
-## <span id="error-analysis">**3.3 Error Analysis**</span>
+## <span id="error-analysis">**3 Error Analysis**</span>
 We conducted an in-depth analysis of the 114 evaluated instances to identify common failure patterns. Our analysis revealed four primary categories of errors that hinder the agent's performance. Below, we provide a concrete example for each category, identified by its Task ID.
 
 ### <span id="pattern-1-wrong-patch-structure-context-mismatch">**Pattern 1: Wrong Patch Structure (Context Mismatch)**</span>
