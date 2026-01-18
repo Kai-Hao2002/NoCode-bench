@@ -151,10 +151,10 @@ This workflow demonstrates how the application enables users to move from task d
 
 | What you may observe | What it means / What to do |
 | :--- | :--- |
-| **“Completed” does not guarantee a correct feature** | Completion indicates the run finished; the feature is only correct if the **test outcome** is fully passing. Always treat tests as the final criterion. |
-| **Patch cannot be applied (Applied% failure / apply error)** | Some generated diffs may fail due to **context mismatch** (e.g., wrong surrounding lines or outdated assumptions). Try rerunning, or choose a different verified task / provide more precise instructions for custom tasks. |
+| **Code edits may be minimal or appear unchanged** | For some requests, the correct fix can be small, or the agent may fail to identify the correct location. Use **File Coverage** and the patch viewer to confirm what changed. |
+| **No evaluation metrics shown for custom repositories** | For custom repository uploads, the **Doc Change Input** panel does not display benchmark metrics. This is expected, as custom repositories do not have predefined ground-truth patches or reference tests required for NoCode-bench metric computation. |
 | **Tests fail due to missing imports or dependencies** | The agent may introduce dependencies that are unavailable or import names that do not exist in the current environment, leading to import errors during testing. Consider refining the instruction to avoid new dependencies. |
-| **Hallucinated functions or APIs** | The generated code may reference non-existent functions/attributes (a known LLM failure mode). Use the patch viewer to spot these quickly and rerun with clearer constraints if needed. |
+| **Patch cannot be applied (Applied% failure / apply error)** | Some generated diffs may fail due to **context mismatch** (e.g., incorrect surrounding lines or outdated assumptions). Try rerunning, or choose a different verified task. |
 | **Patch applies, but the feature still fails (logic incomplete)** | The code may run but not satisfy feature tests (partial progress). Check the results metrics and patch to understand what was implemented and rerun or refine the request. |
-| **Regression risk: existing behavior may break** | Some runs may “over-fix” or touch incorrect files, causing previously passing tests to fail. Prefer verified tasks for stable benchmarking; for custom repos, keep instructions narrow and specific. |
-| **Code edits may be minimal or appear unchanged** | For some requests, the best fix can be small (or the model may fail to identify the right location). Use **File Coverage** and the patch viewer to confirm what changed. |
+| **Hallucinated functions or APIs** | The generated code may reference non-existent functions or attributes (a known LLM failure mode). Use the patch viewer to spot these quickly and rerun with clearer constraints if needed. |
+| **Regression risk: existing behavior may break** | Some runs may over-fix or touch incorrect files, causing previously passing tests to fail. Prefer verified tasks for stable benchmarking; for custom repositories, keep instructions narrow and specific. |
