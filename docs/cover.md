@@ -166,7 +166,7 @@ body, html {
         <p>School of Computation, Information and Technology</p>
         <p>Advanced Topics on Software Engineering (CITHN3003)</p>
         <p>Winter Semester 2025/2026</p>
-        <p>January 20, 2026</p>
+        <p>February 2, 2026</p>
     </div>
 </div>
 
@@ -188,7 +188,7 @@ body, html {
                 Code Development
             </h3>
             <p style="font-size: 1.0em; line-height: 1.6; margin-left: 0;">
-            AI tools, including GitHub Copilot and ChatGPT, were utilized to assist in code generation, debugging, and optimization. Each code segment was reviewed and tested by team members to ensure functionality and adherence to coding standards.
+            AI tools, including GitHub Copilot , Gemini, and ChatGPT, were utilized to assist in code generation, debugging, and optimization. Each code segment was reviewed and tested by team members to ensure functionality and adherence to coding standards.
             </p>
         </div>
         <div style="margin: 25px 0;">
