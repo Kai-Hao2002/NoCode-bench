@@ -84,6 +84,8 @@ The NoCode-bench pipeline automates the transition from a natural-language docum
 | **Docker Validation** | Isolated Containerized Testing (F2P & P2P) | Provides a reproducible and safe environment to verify patches by running existing tests (Pass-to-Pass) and new feature tests (Fail-to-Pass) to ensure functional correctness without regressions. |
 | **Self-Correction Loop** | Iterative Error-Feedback Loop (Attempt-based) | Captures execution failures and test logs to feed back into the model's context, allowing the agent to analyze logic errors and refine its implementation in subsequent attempts. |
 
+<div style="page-break-after: always;"></div>
+
 ## <span id="team-roles--responsibilities">**4. Team Roles & Responsibilities**</span>
 | Name | Role | Key Contributions |
 | :--- | :--- | :--- |
