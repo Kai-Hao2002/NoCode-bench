@@ -142,7 +142,7 @@ body, html {
         <h3>Group 7</h3>
         <div class="team-members">
             <div class="team-member">
-                <h4>Kai-Hao, Yang</h4>
+                <h4>Kai-Hao Yang</h4>
             </div>
             <div class="team-member">
                 <h4>Hao Lin</h4>
@@ -151,7 +151,7 @@ body, html {
                 <h4>Han Hu</h4>
             </div>
             <div class="team-member">
-                <h4>Kaihui, You</h4>
+                <h4>Kai-Hui You</h4>
             </div>
             <div class="team-member">
                 <h4>Hsuan Lien</h4>

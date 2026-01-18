@@ -8,7 +8,6 @@ code { font-family: 'Consolas', monospace !important; color: green; background-c
 </style>
 
 # **Project Management Report**
-
 ## **Table of Contents**
 - [**Project Management Report**](#project-management-report)
   - [**Table of Contents**](#table-of-contents)

@@ -12,21 +12,23 @@ tr:nth-child(even) { background-color: #f2f2f2; }
 img { max-width: 100%; height: auto; border: 1px solid #ddd; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
 </style>
 
-# **3. Testing Report**
+# **Testing Report**
 
 ## **Table of Contents**
-1. [Unit Test](#unit-test)
-   - [Detailed Coverage Analysis](#detailed-coverage-analysis)
-2. [Performance Evaluation](#performance-evaluation)
-   - [Metric Definitions](#metric-definitions)
-   - [Overall Benchmark Performance](#overall-benchmark-performance)
-   - [Ablation Studies](#ablation-studies)
-3. [Error Analysis](#error-analysis)
-   - [Pattern 1: Wrong Patch Structure (Context Mismatch)](#pattern-1-wrong-patch-structure-context-mismatch)
-   - [Pattern 2: Missing Dependencies (Import Errors)](#pattern-2-missing-dependencies-import-errors)
-   - [Pattern 3: Hallucinated Function Usage](#pattern-3-hallucinated-function-usage)
-   - [Pattern 4: Incomplete Fix (Logic Failure)](#pattern-4-incomplete-fix-logic-failure)
-4. [References](#references)
+- [**Testing Report**](#testing-report)
+  - [**Table of Contents**](#table-of-contents)
+  - [**1. Unit Test**](#1-unit-test)
+    - [**Detailed Coverage Analysis**](#detailed-coverage-analysis)
+  - [**2 Performance Evaluation**](#2-performance-evaluation)
+    - [**2.1 Metric Definitions**](#21-metric-definitions)
+    - [**2.2 Overall Benchmark Performance**](#22-overall-benchmark-performance)
+    - [**2.3 Ablation Studies**](#23-ablation-studies)
+  - [**3 Error Analysis**](#3-error-analysis)
+    - [**Pattern 1: Wrong Patch Structure (Context Mismatch)**](#pattern-1-wrong-patch-structure-context-mismatch)
+    - [**Pattern 2: Missing Dependencies (Import Errors)**](#pattern-2-missing-dependencies-import-errors)
+    - [**Pattern 3: Hallucinated Function Usage**](#pattern-3-hallucinated-function-usage)
+    - [**Pattern 4: Incomplete Fix (Logic Failure)**](#pattern-4-incomplete-fix-logic-failure)
+  - [**References**](#references)
 
 <div style="page-break-after: always;"></div>
 
